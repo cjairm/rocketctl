@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        run: |
+          # Build for Intel Macs (amd64)
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o rocketctl-darwin-amd64 .
+
+          # Build for Apple Silicon (arm64)
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o rocketctl-darwin-arm64 .
+
+      - name: Generate checksums
+        run: |
+          shasum -a 256 rocketctl-darwin-amd64 > checksums.txt
+          shasum -a 256 rocketctl-darwin-arm64 >> checksums.txt
+          cat checksums.txt
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION=${{ steps.get_version.outputs.VERSION }}
+
+          # Extract changelog section for this version
+          if grep -q "## \[$VERSION\]" CHANGELOG.md; then
+            awk "/## \[$VERSION\]/,/## \[/" CHANGELOG.md | sed '$d' > release_notes.md
+          else
+            echo "Release v$VERSION" > release_notes.md
+            echo "" >> release_notes.md
+            echo "See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details." >> release_notes.md
+          fi
+
+          # Add installation instructions
+          cat >> release_notes.md << 'EOF'
+
+          ## Installation
+
+          ### Quick Install (Recommended)
+
+          ```bash
+          curl -sSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+          ```
+
+          ### Manual Download
+
+          **macOS Intel (x86_64):**
+          ```bash
+          curl -L https://github.com/${{ github.repository }}/releases/download/v${{ steps.get_version.outputs.VERSION }}/rocketctl-darwin-amd64 -o rocketctl
+          chmod +x rocketctl
+          sudo mv rocketctl /usr/local/bin/
+          ```
+
+          **macOS Apple Silicon (ARM64):**
+          ```bash
+          curl -L https://github.com/${{ github.repository }}/releases/download/v${{ steps.get_version.outputs.VERSION }}/rocketctl-darwin-arm64 -o rocketctl
+          chmod +x rocketctl
+          sudo mv rocketctl /usr/local/bin/
+          ```
+
+          ## Checksums
+
+          ```
+          EOF
+
+          cat checksums.txt >> release_notes.md
+          echo '```' >> release_notes.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            rocketctl-darwin-amd64
+            rocketctl-darwin-arm64
+            checksums.txt
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: |
+            rocketctl-darwin-amd64
+            rocketctl-darwin-arm64
+            checksums.txt

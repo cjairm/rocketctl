@@ -1,0 +1,50 @@
+version: '3.8'
+
+networks:
+  {{.Project}}-network:
+    driver: bridge
+
+services:
+{{- if .Domain}}
+  caddy:
+    image: caddy:2-alpine
+    container_name: {{.Project}}-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - {{.Project}}-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+{{- end}}
+
+{{- range .Services}}
+  {{$.Project}}-{{.}}:
+    image: {{$.Registry}}/{{$.Project}}_{{.}}:${{"{"}}{{. | upper}}_VERSION:-latest{{"}"}}
+    container_name: {{$.Project}}-{{.}}
+    restart: unless-stopped
+    env_file:
+      - ./{{if $.IsMonorepo}}{{.}}/{{end}}.env.production
+    networks:
+      - {{$.Project}}-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Add your service-specific configuration here (ports, volumes, etc.)
+{{end}}
+
+{{- if .Domain}}
+volumes:
+  caddy_data:
+  caddy_config:
+{{- end}}

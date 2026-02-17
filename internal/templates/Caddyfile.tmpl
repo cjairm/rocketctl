@@ -1,0 +1,16 @@
+{
+	email {{.Email}}
+}
+
+{{.Domain}} {
+	# Example reverse proxy configuration
+	# Customize these based on your services
+	
+{{- range .Services}}
+	# Route for {{.}} service
+	# reverse_proxy /{{.}}/* {{$.Project}}-{{.}}:PORT
+{{end}}
+	
+	# Default route
+	# reverse_proxy {{$.Project}}-web:PORT
+}

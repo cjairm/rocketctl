@@ -1,0 +1,37 @@
+# Binaries
+rocketctl
+rocketctl-*
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Dependency directories
+vendor/
+
+# Go workspace file
+go.work
+
+# Release artifacts
+dist/
+*.tar.gz
+*.zip
+checksums.txt
+release-notes.md
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
