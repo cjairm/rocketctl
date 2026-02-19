@@ -5,6 +5,26 @@ All notable changes to RocketCTL will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-02-18
+
+### Added
+- `ecr create` command to create ECR repositories for all services defined in `rocket.yaml`, named `<project>_<service>` with AES-256 encryption and mutable tags (idempotent)
+
+### Changed
+- `init` no longer generates `.env.production.example` files — `.env.production` is created manually on the server
+- `build` no longer loads `.env.production` as `--build-arg`s; env vars are injected at runtime via `env_file` in `docker-compose.prod.yml`
+- `test` no longer passes `.env.production` as build args; still injects them at runtime into the test container
+
+### Fixed
+- `push` command produced an invalid image reference (`image::tag`) due to double colon when constructing the full image name
+
+### Documentation
+- Added Prerequisites section to README (Docker, Docker Compose, AWS CLI)
+- Updated Quick Start to include `rocketctl ecr create` as step 2
+- Updated AWS ECR Setup section to use `rocketctl ecr create` instead of raw `aws` CLI commands
+- Removed `.env.production.example` references from folder structure and environment variable docs
+- Updated next steps in `init` output to reflect that `.env.production` is created manually on the server
+
 ## [1.0.0] - 2026-02-16
 
 ### Added
@@ -49,4 +69,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Color-coded terminal output
 - Helpful error messages
 
+[1.1.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.1.0
 [1.0.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.0.0
