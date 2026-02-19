@@ -32,7 +32,6 @@ func runDev(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
 	var services []string
 	if len(args) > 0 {
 		service := args[0]
@@ -42,10 +41,8 @@ func runDev(cmd *cobra.Command, args []string) error {
 		// Compose service name format: <project>-<service>
 		services = []string{fmt.Sprintf("%s-%s", cfg.Project, service)}
 	}
-
 	if noCacheFlag && !buildFlag {
 		return fmt.Errorf("--no-cache requires --build")
 	}
-
 	return compose.Up("docker-compose.yml", services, buildFlag, noCacheFlag, false)
 }

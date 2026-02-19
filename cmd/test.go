@@ -68,13 +68,8 @@ func runTest(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Load .env.production for build args if it exists
+	// Get .env.production path for runtime injection
 	envProductionPath, err := cfg.GetEnvProductionPath(service)
-	if err != nil {
-		return err
-	}
-
-	buildArgs, err := docker.LoadEnvFile(envProductionPath)
 	if err != nil {
 		return err
 	}
@@ -87,7 +82,6 @@ func runTest(cmd *cobra.Command, args []string) error {
 		Tag:        currentVersion,
 		Dockerfile: dockerfilePath,
 		Context:    serviceDir,
-		BuildArgs:  buildArgs,
 		NoCache:    false,
 	}
 

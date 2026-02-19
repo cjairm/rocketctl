@@ -79,17 +79,6 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Load .env.production for build args if it exists
-	envProductionPath, err := cfg.GetEnvProductionPath(service)
-	if err != nil {
-		return err
-	}
-
-	buildArgs, err := docker.LoadEnvFile(envProductionPath)
-	if err != nil {
-		return err
-	}
-
 	// Build the image with both local and registry tags
 	imageName := cfg.GetImageName(service)
 	registryImageName := fmt.Sprintf("%s/%s", cfg.Registry, imageName)
@@ -99,7 +88,6 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		Tag:        newVersion,
 		Dockerfile: dockerfilePath,
 		Context:    serviceDir,
-		BuildArgs:  buildArgs,
 		NoCache:    true,
 	}
 
@@ -119,6 +107,5 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("✓ Successfully built and tagged %s:%s\n", registryImageName, newVersion)
 	fmt.Printf("✓ Updated version to %s\n", newVersion)
-
 	return nil
 }

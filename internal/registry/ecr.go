@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 // LoginECR authenticates Docker with AWS ECR
@@ -27,5 +28,26 @@ func LoginECR(registry, region string) error {
 	}
 
 	fmt.Println("✓ Successfully authenticated with ECR")
+	return nil
+}
+
+// CreateRepository creates an ECR repository with AES-256 encryption and mutable tags.
+// If the repository already exists, it is skipped (idempotent).
+func CreateRepository(name, region string) error {
+	cmd := exec.Command(
+		"aws", "ecr", "create-repository",
+		"--repository-name", name,
+		"--region", region,
+		"--image-tag-mutability", "MUTABLE",
+		"--encryption-configuration", "encryptionType=AES256",
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if strings.Contains(string(output), "RepositoryAlreadyExistsException") {
+			fmt.Printf("  Repository %q already exists, skipping\n", name)
+			return nil
+		}
+		return fmt.Errorf("failed to create ECR repository %q: %w\n%s", name, err, string(output))
+	}
 	return nil
 }

@@ -173,26 +173,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Generate .env.production.example files
-	for _, service := range cfg.GetServices() {
-		serviceDir, err := cfg.GetServiceDirectory(service)
-		if err != nil {
-			return err
-		}
-		envExamplePath := filepath.Join(serviceDir, ".env.production.example")
-		serviceData := templates.TemplateData{
-			Service: service,
-		}
-		if err := templates.GenerateEnvProductionExample(serviceData, envExamplePath); err != nil {
-			return err
-		}
-	}
-
 	fmt.Println("\n✓ Initialization complete!")
 	fmt.Println("\nNext steps:")
 	fmt.Println("1. Create Dockerfile and Dockerfile.production for each service")
 	fmt.Println("2. Create docker-compose.yml for your development environment")
-	fmt.Println("3. Copy .env.production.example to .env.production and fill in secrets")
+	fmt.Println("3. Create .env.production on the server with the required secrets")
 	fmt.Println("4. Customize docker-compose.prod.yml as needed")
 	if cfg.Domain != "" {
 		fmt.Println("5. Customize caddy/Caddyfile as needed")

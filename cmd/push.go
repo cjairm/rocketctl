@@ -62,7 +62,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 
 	// Push the image
 	fullImageName := cfg.GetFullImageName(service, currentVersion)
-	if err := docker.Push(cfg.GetFullImageName(service, ""), currentVersion); err != nil {
+	if err := docker.Push(fmt.Sprintf("%s/%s", cfg.Registry, cfg.GetImageName(service)), currentVersion); err != nil {
 		return err
 	}
 

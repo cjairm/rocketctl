@@ -140,7 +140,6 @@ func (c *Config) GetDockerfilePath(service string, production bool) (string, err
 	if err != nil {
 		return "", err
 	}
-
 	if production {
 		return filepath.Join(serviceDir, "Dockerfile.production"), nil
 	}
