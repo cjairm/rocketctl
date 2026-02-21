@@ -32,7 +32,7 @@ services:
     container_name: {{$.Project}}-{{.}}
     restart: unless-stopped
     env_file:
-      - ./{{if $.IsMonorepo}}{{.}}/{{end}}.env.production
+      - ./{{if $.IsMonorepo}}{{.}}/{{end}}.env
     networks:
       - {{$.Project}}-network
     logging:
