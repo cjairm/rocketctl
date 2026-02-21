@@ -40,7 +40,13 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-    # Add your service-specific configuration here (ports, volumes, etc.)
+    # Expose ports to host (uncomment for local testing or production without reverse proxy)
+    # ports:
+    #   - "8000:8000"  # Format: "host:container"
+    # Or expose to other containers only (no host access):
+    # expose:
+    #   - "8000"
+    # Add your service-specific configuration here (volumes, healthchecks, etc.)
 {{end}}
 
 {{- if .Domain}}

@@ -5,6 +5,42 @@ All notable changes to RocketCTL will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-02-21
+
+### Added
+- **`up` command** - Unified command for starting services in both dev and production modes
+  - `rocketctl up [service]` - Start dev environment (replaces `dev`)
+  - `rocketctl up --prod [service]` - Build and run production stack locally for E2E testing (replaces `test`)
+  - `--build` flag - Rebuild images before starting (dev mode)
+  - `--no-cache` flag - Rebuild without cache (requires --build, dev mode)
+- **`--prod` flag support** - Added to multiple commands for production/test environment operations
+  - `rocketctl down --prod` - Stop production/test containers
+  - `rocketctl logs --prod [service] -f` - View production container logs
+- **Port exposure documentation** - Added commented examples in docker-compose.prod.yml template showing how to expose ports for local testing
+
+### Changed
+- **Command structure** - Renamed and consolidated commands for better consistency
+  - `test` → `up --prod` - More intuitive, matches Docker Compose conventions
+  - `dev` → `up` - Unified interface, less duplication
+- **Service resolution** - Updated to support optional service argument for both monorepo and single-service repos
+  - `rocketctl up` (no args) now builds all services in monorepo, then starts entire stack
+  - `rocketctl up [service]` builds only specified service, but starts entire stack for E2E testing
+- **Helpful command output** - Updated `up --prod` to suggest using `rocketctl` commands instead of raw docker commands
+
+### Removed
+- **`dev` command** - Functionality merged into `up` command with same flags (--build, --no-cache)
+- **`test` command** - Functionality moved to `up --prod` for better consistency
+
+### Fixed
+- **E2E testing** - `up --prod` now starts entire docker-compose stack instead of single service, enabling proper end-to-end testing
+- **Production environment matching** - Test environment now uses docker-compose.prod.yml, ensuring it matches actual production deployment
+
+### Documentation
+- Updated README.md with new command structure and workflows
+- Added "Testing Production Locally" workflow section
+- Updated all command examples to use `up` and `down --prod`
+- Updated command reference table with new flags and usage
+
 ## [1.2.0] - 2026-02-21
 
 ### Documentation
@@ -91,6 +127,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Color-coded terminal output
 - Helpful error messages
 
+[1.3.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.3.0
 [1.2.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.2.0
 [1.1.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.1.0
 [1.0.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.0.0

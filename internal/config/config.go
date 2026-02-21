@@ -17,6 +17,7 @@ type Config struct {
 	Registry string   `yaml:"registry"`
 	Region   string   `yaml:"region"`
 	Domain   string   `yaml:"domain,omitempty"`
+	IP       string   `yaml:"ip,omitempty"` // Server IP for SSH access during development
 }
 
 // Load reads and parses the rocket.yaml file from the current directory

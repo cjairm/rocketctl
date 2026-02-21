@@ -79,6 +79,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	domain = strings.TrimSpace(domain)
 
+	// Prompt for IP (optional)
+	fmt.Print("Server IP (optional, for SSH access during development): ")
+	ip, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read \"Server IP\" response: %w", err)
+	}
+	ip = strings.TrimSpace(ip)
+
 	// Prompt for repo type
 	fmt.Print("Is this a monorepo? (y/n) [n]: ")
 	repoType, err := reader.ReadString('\n')
@@ -93,6 +101,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cfg.Registry = registry
 	cfg.Region = region
 	cfg.Domain = domain
+	cfg.IP = ip
 
 	if isMonorepo {
 		// Prompt for service names

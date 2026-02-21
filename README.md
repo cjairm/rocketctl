@@ -22,6 +22,7 @@ source ~/.zshrc  # or source ~/.bashrc
 ### Manual Download
 
 **Intel Macs:**
+
 ```bash
 curl -L https://github.com/cjairm/rocketctl/releases/latest/download/rocketctl-darwin-amd64 -o rocketctl
 chmod +x rocketctl
@@ -29,6 +30,7 @@ sudo mv rocketctl /usr/local/bin/
 ```
 
 **Apple Silicon:**
+
 ```bash
 curl -L https://github.com/cjairm/rocketctl/releases/latest/download/rocketctl-darwin-arm64 -o rocketctl
 chmod +x rocketctl
@@ -47,11 +49,11 @@ Or: `go install github.com/cjairm/rocketctl@latest`
 
 ### Troubleshooting
 
-| Problem | Fix |
-|---------|-----|
+| Problem             | Fix                                                                          |
+| ------------------- | ---------------------------------------------------------------------------- |
 | `command not found` | `echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc` |
-| `Permission denied` | `chmod +x ~/.local/bin/rocketctl` |
-| `Bad CPU type` | Check `uname -m`: use `amd64` for Intel, `arm64` for Apple Silicon |
+| `Permission denied` | `chmod +x ~/.local/bin/rocketctl`                                            |
+| `Bad CPU type`      | Check `uname -m`: use `amd64` for Intel, `arm64` for Apple Silicon           |
 
 ### Uninstall
 
@@ -87,7 +89,7 @@ Create `.env.production` on your server with runtime secrets. This file is injec
 
 ```bash
 rocketctl ecr create             # Create ECR repos (once)
-rocketctl test api               # Test production build locally
+rocketctl up --prod              # Test production build locally (E2E)
 rocketctl build api --bump patch # Build and bump version
 rocketctl push api               # Push to registry
 rocketctl deploy                 # Deploy (on production server)
@@ -98,20 +100,22 @@ rocketctl deploy                 # Deploy (on production server)
 ### rocket.yaml
 
 **Single-Service:**
+
 ```yaml
 project: my-backend
 service: backend
 registry: 123456789.dkr.ecr.us-east-2.amazonaws.com
 region: us-east-2
-domain: api.myapp.com  # optional
+domain: api.myapp.com # optional
 ```
 
 **Monorepo:**
+
 ```yaml
 project: myapp
 registry: 123456789.dkr.ecr.us-east-2.amazonaws.com
 region: us-east-2
-domain: myapp.com  # optional
+domain: myapp.com # optional
 services:
   - api
   - web
@@ -139,6 +143,7 @@ Versions are stored in `.rocket-version` files (one per service). The version is
 ### Folder Structure
 
 **Monorepo:**
+
 ```
 project/
   rocket.yaml
@@ -158,6 +163,7 @@ project/
 ```
 
 **Single-Service:**
+
 ```
 project/
   rocket.yaml
@@ -171,36 +177,49 @@ project/
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `rocketctl init` | Initialize project |
+| Command                                                  | Description                             |
+| -------------------------------------------------------- | --------------------------------------- |
+| `rocketctl init`                                         | Initialize project                      |
 | `rocketctl build [service] --bump [patch\|minor\|major]` | Build production image and bump version |
-| `rocketctl push [service]` | Push image to registry |
-| `rocketctl test [service]` | Test production build locally |
-| `rocketctl dev [service] [--build]` | Start dev environment |
-| `rocketctl down` | Stop dev environment |
-| `rocketctl deploy` | Deploy to production |
-| `rocketctl ps` | List running containers |
-| `rocketctl logs [service] [-f]` | Show service logs |
-| `rocketctl exec [service] [cmd]` | Execute command in container |
-| `rocketctl list` | List all services and versions |
-| `rocketctl version [service]` | Show version(s) |
-| `rocketctl prune` | Clean up old images |
-| `rocketctl ecr create` | Create ECR repositories (idempotent) |
+| `rocketctl push [service]`                               | Push image to registry                  |
+| `rocketctl up [service] [--build] [--no-cache]`          | Start dev environment                   |
+| `rocketctl up --prod [service]`                          | Test production build locally (E2E)     |
+| `rocketctl down`                                         | Stop dev environment                    |
+| `rocketctl down --prod`                                  | Stop production/test environment        |
+| `rocketctl deploy`                                       | Deploy to production                    |
+| `rocketctl ps`                                           | List running containers                 |
+| `rocketctl logs [service] [-f] [--prod]`                 | Show service logs                       |
+| `rocketctl exec [service] [cmd]`                         | Execute command in container            |
+| `rocketctl list`                                         | List all services and versions          |
+| `rocketctl version [service]`                            | Show version(s)                         |
+| `rocketctl prune`                                        | Clean up old images                     |
+| `rocketctl ecr create`                                   | Create ECR repositories (idempotent)    |
 
 ## Workflows
 
 **Development:**
+
 ```bash
-rocketctl dev            # Start dev environment
+rocketctl up             # Start dev environment
+rocketctl up --build     # Rebuild images before starting
 rocketctl logs api -f    # Tail logs
 rocketctl exec api bash  # Shell into container
 rocketctl down           # Stop all
 ```
 
-**Release:**
+**Testing Production Locally:**
+
 ```bash
-rocketctl test api               # Test locally
+rocketctl up --prod           # Build and start entire production stack (E2E)
+rocketctl logs --prod api -f  # View production logs
+rocketctl ps                  # List running containers
+rocketctl down --prod         # Stop production stack
+```
+
+**Release:**
+
+```bash
+rocketctl up --prod              # Test locally (E2E)
 rocketctl build api --bump minor # Build and version
 rocketctl push api               # Push to registry
 rocketctl deploy                 # Deploy (on server)
@@ -274,16 +293,16 @@ git push origin v1.0.0
 
 ### Makefile Targets
 
-| Target | Description |
-|--------|-------------|
-| `make build` | Build for current platform |
-| `make install` | Build and install to ~/.local/bin |
+| Target                       | Description                                 |
+| ---------------------------- | ------------------------------------------- |
+| `make build`                 | Build for current platform                  |
+| `make install`               | Build and install to ~/.local/bin           |
 | `make release VERSION=X.Y.Z` | Build release binaries (both architectures) |
-| `make check` | Run fmt + vet + test |
-| `make test` | Run tests |
-| `make fmt` | Format code |
-| `make vet` | Run go vet |
-| `make clean` | Remove build artifacts |
+| `make check`                 | Run fmt + vet + test                        |
+| `make test`                  | Run tests                                   |
+| `make fmt`                   | Format code                                 |
+| `make vet`                   | Run go vet                                  |
+| `make clean`                 | Remove build artifacts                      |
 
 ### Pre-Release Checklist
 
