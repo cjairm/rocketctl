@@ -212,38 +212,64 @@ rocketctl ps                     # Verify
 ### Prerequisites
 
 - Write access to the repository
-- Go 1.23+ installed
 - Clean git working directory, on `main` branch
+- CHANGELOG.md updated with new version
 
-### Automated (Recommended)
+### Automated via GitHub Actions (Recommended)
+
+GitHub Actions automatically builds, creates releases, and publishes binaries when you push a version tag.
+
+```bash
+# 1. Update CHANGELOG.md with new version
+# 2. Commit and push changes
+git add CHANGELOG.md README.md
+git commit -m "docs: prepare release v1.0.0"
+git push origin main
+
+# 3. Create and push tag (triggers GitHub Actions)
+git tag -a v1.0.0 -m "Release v1.0.0"
+git push origin v1.0.0
+
+# 4. GitHub Actions automatically:
+#    - Builds binaries for both architectures
+#    - Generates checksums
+#    - Extracts changelog notes
+#    - Creates GitHub Release
+#    - Uploads all artifacts
+```
+
+Watch progress at: `https://github.com/cjairm/rocketctl/actions`
+
+### Local Testing with scripts/release.sh
+
+To test locally before pushing:
 
 ```bash
 # 1. Update CHANGELOG.md
-# 2. Run release script (builds, tags, generates release notes)
+# 2. Run release script (builds locally, creates tag)
 ./scripts/release.sh 1.0.0
 
 # 3. Test binaries
 ./dist/rocketctl-darwin-amd64 --help
 ./dist/rocketctl-darwin-arm64 --help
 
-# 4. Push tag -- GitHub Actions builds and publishes the release
+# 4. Push tag (triggers GitHub Actions for official release)
 git push origin v1.0.0
 ```
 
-### Manual
+### Fully Manual
 
 ```bash
 # 1. Update CHANGELOG.md, commit and push
-# 2. Run checks and build
 make check                   # fmt + vet + test
-make release VERSION=1.0.0   # Builds dist/rocketctl-darwin-{amd64,arm64} + checksums.txt
+make release VERSION=1.0.0   # Build locally
 
-# 3. Test, tag, push
+# 2. Test, tag, push
 ./dist/rocketctl-darwin-arm64 --help
 git tag -a v1.0.0 -m "Release v1.0.0"
 git push origin v1.0.0
 
-# 4. Create GitHub Release and upload dist/* files
+# GitHub Actions will still run and create the official release
 ```
 
 ### Makefile Targets
