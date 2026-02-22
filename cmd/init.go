@@ -80,12 +80,31 @@ func runInit(cmd *cobra.Command, args []string) error {
 	domain = strings.TrimSpace(domain)
 
 	// Prompt for IP (optional)
-	fmt.Print("Server IP (optional, for SSH access during development): ")
+	fmt.Print("Server IP (optional, for SSH deployment): ")
 	ip, err := reader.ReadString('\n')
 	if err != nil {
 		return fmt.Errorf("failed to read \"Server IP\" response: %w", err)
 	}
 	ip = strings.TrimSpace(ip)
+
+	// Prompt for SSH user (optional)
+	var sshUser string
+	var sshKeyPath string
+	if ip != "" {
+		fmt.Print("SSH user (leave empty for current user): ")
+		sshUserInput, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read \"SSH user\" response: %w", err)
+		}
+		sshUser = strings.TrimSpace(sshUserInput)
+
+		fmt.Print("SSH key path (leave empty for ~/.ssh/id_rsa or ~/.ssh/id_ed25519): ")
+		sshKeyPathInput, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read \"SSH key path\" response: %w", err)
+		}
+		sshKeyPath = strings.TrimSpace(sshKeyPathInput)
+	}
 
 	// Prompt for repo type
 	fmt.Print("Is this a monorepo? (y/n) [n]: ")
@@ -102,6 +121,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cfg.Region = region
 	cfg.Domain = domain
 	cfg.IP = ip
+	cfg.SSHUser = sshUser
+	cfg.SSHKeyPath = sshKeyPath
 
 	if isMonorepo {
 		// Prompt for service names

@@ -65,6 +65,7 @@ curl -sSL https://raw.githubusercontent.com/cjairm/rocketctl/main/uninstall.sh |
 
 - **Docker** and **Docker Compose**
 - **AWS CLI** configured with ECR permissions (`aws configure`)
+- **SSH access** to production server (for deployment)
 
 ## Quick Start
 
@@ -106,7 +107,10 @@ project: my-backend
 service: backend
 registry: 123456789.dkr.ecr.us-east-2.amazonaws.com
 region: us-east-2
-domain: api.myapp.com # optional
+domain: api.myapp.com      # optional
+ip: 192.168.1.100          # optional - for SSH deployment
+ssh_user: ubuntu           # optional - defaults to current user
+ssh_key_path: ~/my-key.pem # optional - custom SSH key (e.g., AWS EC2 .pem file)
 ```
 
 **Monorepo:**
@@ -115,7 +119,10 @@ domain: api.myapp.com # optional
 project: myapp
 registry: 123456789.dkr.ecr.us-east-2.amazonaws.com
 region: us-east-2
-domain: myapp.com # optional
+domain: myapp.com          # optional
+ip: 192.168.1.100          # optional - for SSH deployment
+ssh_user: ubuntu           # optional - defaults to current user
+ssh_key_path: ~/my-key.pem # optional - custom SSH key (e.g., AWS EC2 .pem file)
 services:
   - api
   - web
@@ -222,8 +229,236 @@ rocketctl down --prod         # Stop production stack
 rocketctl up --prod              # Test locally (E2E)
 rocketctl build api --bump minor # Build and version
 rocketctl push api               # Push to registry
-rocketctl deploy                 # Deploy (on server)
-rocketctl ps                     # Verify
+rocketctl deploy                 # Deploy to remote server
+```
+
+## Deployment
+
+### Overview
+
+The `rocketctl deploy` command automates deployment to a remote server via SSH. It:
+
+1. Connects to your server via SSH
+2. Creates directory structure: `~/apps/<PROJECT-NAME>/`
+3. Uploads necessary files:
+   - `docker-compose.yml` (generated from template)
+   - `Caddyfile` (if domain is configured)
+   - `.env` (if it doesn't exist on the server)
+4. Authenticates with ECR
+5. Pulls latest Docker images
+6. Restarts services with zero-downtime
+
+### Prerequisites
+
+1. **SSH Access**: Ensure you can SSH into your server with key-based authentication
+2. **Server Setup**: Your production server must have:
+   - Docker and Docker Compose installed
+   - AWS CLI configured with ECR access (`aws configure`)
+   - SSH key added to `~/.ssh/authorized_keys`
+
+3. **RocketCTL Configuration**: Run `rocketctl init` and provide:
+   - Server IP address
+   - SSH user (optional, defaults to your current username)
+
+### SSH Key Setup
+
+RocketCTL supports multiple authentication methods:
+
+**Option 1: Default SSH Keys** (automatic)
+
+RocketCTL automatically looks for keys in:
+1. `~/.ssh/id_ed25519` (recommended, modern)
+2. `~/.ssh/id_rsa` (traditional)
+
+```bash
+# Generate SSH key
+ssh-keygen -t ed25519 -C "your_email@example.com"
+
+# Copy public key to server
+ssh-copy-id user@server-ip
+
+# Test connection
+ssh user@server-ip
+```
+
+**Option 2: Custom Key Path** (e.g., AWS EC2 .pem files)
+
+For custom keys like AWS EC2 `.pem` files, specify the path in `rocket.yaml`:
+
+```yaml
+ssh_key_path: ~/Downloads/my-ec2-key.pem
+```
+
+Or set it during `rocketctl init` when prompted.
+
+Example for AWS EC2:
+
+```bash
+# Download your .pem file from AWS Console
+# Set permissions (required)
+chmod 400 ~/Downloads/my-ec2-key.pem
+
+# Configure in rocket.yaml
+ssh_key_path: ~/Downloads/my-ec2-key.pem
+
+# Deploy
+rocketctl deploy
+```
+
+**Equivalent SSH command:**
+```bash
+# RocketCTL does this automatically:
+ssh -i ~/Downloads/my-ec2-key.pem ubuntu@192.168.1.100
+```
+
+### First-Time Deployment
+
+```bash
+# 1. Build and push images
+rocketctl build api --bump patch
+rocketctl push api
+
+# 2. Deploy to server (uploads files, pulls images, starts services)
+rocketctl deploy
+
+# 3. SSH into server and configure .env with actual values
+ssh user@server-ip
+cd ~/apps/myproject
+nano .env  # Add your secrets: DATABASE_URL, API_KEYS, etc.
+
+# 4. Restart services to pick up new env vars
+docker compose up -d
+```
+
+### Subsequent Deployments
+
+```bash
+# Build, push, and deploy
+rocketctl build api --bump patch
+rocketctl push api
+rocketctl deploy
+```
+
+### Deployment Directory Structure
+
+On your production server, files are organized as:
+
+```
+~/apps/
+  <PROJECT-NAME>/
+    docker-compose.yml  # Uploaded by rocketctl
+    Caddyfile           # Uploaded if domain is configured
+    .env                # Created once, you edit manually with secrets
+```
+
+### Managing Services on Production
+
+**View logs:**
+
+```bash
+ssh user@server-ip 'cd ~/apps/myproject && docker compose logs -f'
+```
+
+**View running services:**
+
+```bash
+ssh user@server-ip 'cd ~/apps/myproject && docker compose ps'
+```
+
+**Restart specific service:**
+
+```bash
+ssh user@server-ip 'cd ~/apps/myproject && docker compose pull api && docker compose up -d --force-recreate api'
+```
+
+**Restart all services:**
+
+```bash
+ssh user@server-ip 'cd ~/apps/myproject && docker compose pull && docker compose up -d'
+```
+
+**Restart Caddy reverse proxy:**
+
+```bash
+ssh user@server-ip 'cd ~/apps/myproject && docker stop apps_caddy_1 && docker rm apps_caddy_1 && docker compose up -d'
+```
+
+### Cleanup Commands
+
+```bash
+# SSH into server
+ssh user@server-ip
+cd ~/apps/myproject
+
+# Remove stopped containers
+docker container prune
+
+# Remove unused images
+docker image prune
+
+# Remove unused volumes (CAUTION: may delete data)
+docker volume prune
+
+# Remove unused networks
+docker network prune
+
+# Full cleanup (CAUTION: removes all unused resources)
+docker system prune
+```
+
+### Troubleshooting Deployment
+
+**SSH connection fails:**
+
+```bash
+# Test SSH connection manually
+ssh -v user@server-ip
+
+# Or with custom key
+ssh -v -i ~/my-key.pem user@server-ip
+
+# Check if SSH keys exist
+ls -la ~/.ssh/
+
+# Verify SSH agent
+ssh-add -l
+
+# Check custom key permissions (must be 400 or 600)
+ls -l ~/my-key.pem
+chmod 400 ~/my-key.pem  # Fix if needed
+```
+
+**ECR authentication fails on server:**
+
+```bash
+# SSH into server and test AWS CLI
+ssh user@server-ip
+aws ecr get-login-password --region us-east-2
+
+# If fails, configure AWS CLI on server
+aws configure
+```
+
+**Services won't start:**
+
+```bash
+# SSH into server and check logs
+ssh user@server-ip
+cd ~/apps/myproject
+docker compose logs
+docker compose ps
+
+# Check if .env is properly configured
+cat .env
+```
+
+**Port conflicts:**
+
+```bash
+# Check which ports are in use
+ssh user@server-ip 'netstat -tuln | grep LISTEN'
+
+# Update docker-compose.yml port mappings if needed
 ```
 
 ## Releasing RocketCTL

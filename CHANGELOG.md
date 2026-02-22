@@ -5,6 +5,52 @@ All notable changes to RocketCTL will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-02-21
+
+### Added
+- **SSH remote deployment** - `rocketctl deploy` now deploys to a remote server via SSH instead of running locally
+  - Connects to the server, creates `~/apps/<PROJECT>/` directory structure
+  - Uploads `docker-compose.prod.yml`, `Caddyfile` (if domain configured), and `.env` (from `.env.example`, only if `.env` doesn't already exist on server)
+  - Runs ECR authentication, image pull, and service restart remotely
+  - Supports monorepo per-service `.env` file handling
+  - Prints helpful SSH commands for viewing logs and status after deployment
+- **New `internal/ssh` package** - SSH client abstraction built on `golang.org/x/crypto/ssh`
+  - `Connect()` - Establishes SSH connections with custom or default key support
+  - `Exec()` / `ExecInteractive()` - Remote command execution (buffered or streaming to stdout/stderr)
+  - `UploadFile()` - Uploads local files to the remote server
+  - `MkdirAll()` - Creates remote directories recursively
+  - `FileExists()` - Checks if a file exists on the remote server
+- **SSH configuration fields** in `rocket.yaml`
+  - `ssh_user` - SSH user for deployment (defaults to current OS user)
+  - `ssh_key_path` - Custom SSH key path (e.g., AWS EC2 `.pem` files)
+- **SSH key setup prompts** in `rocketctl init` - When a server IP is provided, init now asks for SSH user and key path
+- **Template render-to-string functions** - `RenderDockerComposeProd()`, `RenderCaddyfile()`, `RenderEnvExample()` for rendering templates to strings without writing to disk
+
+### Changed
+- **`deploy` command** - Complete rewrite from local execution to remote SSH-based deployment
+  - Requires `ip` to be configured in `rocket.yaml` (errors with helpful message if missing)
+  - No longer depends on `internal/compose` or `internal/registry` packages directly; all operations run remotely
+- **Go version** bumped from `1.23.6` to `1.24.0`
+- **`init` command** - IP prompt updated from "for SSH access during development" to "for SSH deployment"
+- **`up` command** - Minor wording updates: `docker-compose` to `docker compose` in command descriptions
+- **Template variable rename** - `envProductionExampleTemplate` renamed to `envExampleTemplate` for clarity
+
+### Dependencies
+- Added `golang.org/x/crypto v0.48.0` (SSH client support)
+- Added `golang.org/x/sys v0.41.0` (transitive dependency)
+
+### Documentation
+- Updated README.md with `ssh_user`, `ssh_key_path`, and `ip` fields in configuration examples
+- Added comprehensive **Deployment** section to README covering:
+  - Deployment overview and workflow
+  - Prerequisites (SSH access, server setup)
+  - SSH key setup (default keys and custom `.pem` files)
+  - First-time and subsequent deployment instructions
+  - Remote directory structure
+  - Managing services on production (logs, restart, status)
+  - Cleanup commands for Docker resources
+  - Troubleshooting guide (SSH, ECR, services, port conflicts)
+
 ## [1.3.0] - 2026-02-21
 
 ### Added
@@ -127,6 +173,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Color-coded terminal output
 - Helpful error messages
 
+[1.4.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.4.0
 [1.3.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.3.0
 [1.2.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.2.0
 [1.1.0]: https://github.com/cjairm/rocketctl/releases/tag/v1.1.0

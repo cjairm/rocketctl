@@ -20,8 +20,8 @@ var (
 
 var upCmd = &cobra.Command{
 	Use:   "up [service]",
-	Short: "Start services with docker-compose",
-	Long:  `Starts services using docker-compose. Use --prod to build and run the production stack for E2E testing. Optionally specify a service to build only that service (with --prod), but the entire stack will still be started.`,
+	Short: "Start services with docker compose",
+	Long:  `Starts services using docker compose. Use --prod to build and run the production stack for E2E testing. Optionally specify a service to build only that service (with --prod), but the entire stack will still be started.`,
 	RunE:  runUp,
 }
 
@@ -122,7 +122,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 		os.Setenv(envKey, currentVersion)
 	}
 
-	// Start the entire stack using docker-compose
+	// Start the entire stack using docker compose
 	fmt.Printf("\n🚀 Starting entire production stack with docker-compose.prod.yml...\n")
 	if err := compose.Up("docker-compose.prod.yml", nil, false, false, true); err != nil {
 		return err

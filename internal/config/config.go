@@ -11,13 +11,15 @@ import (
 
 // Config represents the rocket.yaml configuration file
 type Config struct {
-	Project  string   `yaml:"project"`
-	Service  string   `yaml:"service,omitempty"`  // For single-service repos
-	Services []string `yaml:"services,omitempty"` // For monorepos
-	Registry string   `yaml:"registry"`
-	Region   string   `yaml:"region"`
-	Domain   string   `yaml:"domain,omitempty"`
-	IP       string   `yaml:"ip,omitempty"` // Server IP for SSH access during development
+	Project    string   `yaml:"project"`
+	Service    string   `yaml:"service,omitempty"`  // For single-service repos
+	Services   []string `yaml:"services,omitempty"` // For monorepos
+	Registry   string   `yaml:"registry"`
+	Region     string   `yaml:"region"`
+	Domain     string   `yaml:"domain,omitempty"`
+	IP         string   `yaml:"ip,omitempty"`           // Server IP for SSH deployment
+	SSHUser    string   `yaml:"ssh_user,omitempty"`     // SSH user (defaults to current user)
+	SSHKeyPath string   `yaml:"ssh_key_path,omitempty"` // Custom SSH key path (e.g., ~/my-key.pem)
 }
 
 // Load reads and parses the rocket.yaml file from the current directory
