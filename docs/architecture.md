@@ -76,25 +76,23 @@ backup of the files it overwrites.
 
 ## Build and release
 
-`make` targets: `build`, `clean`, `release`, `install`, `test`, `fmt`, `vet`, `check`, `help`.
+`make` targets: `build`, `clean`, `release`, `install`, `test`, `fmt`, `vet`, `check`, `mutate`, `help`.
 Default goal is `help`. Releases are macOS-only (`darwin/amd64`, `darwin/arm64`).
 
 Tagging `v*` triggers `.github/workflows/release.yml`, which builds both binaries, generates
-checksums, slices the matching section out of `CHANGELOG.md`, and publishes a GitHub Release.
-**No workflow runs on pull requests, and the release workflow runs no tests, vet, or fmt check.**
+checksums, slices the matching section out of `CHANGELOG.md`, and publishes a GitHub Release. The
+release workflow runs no tests, vet, or fmt check. `.github/workflows/ci.yml` gates pull requests
+and pushes to `main` with `gofmt -l`, `go vet`, and `go test` — see the "Testing" section in
+`CLAUDE.md`.
 
 ## Known defects
 
 Verified against the tree, worth fixing:
 
-- `main.go` is not gofmt-clean (blank line in the header comment), so `make check` mutates the
-  working tree on a clean checkout.
-- `go.mod` marks `golang.org/x/crypto` as `// indirect`, but `internal/ssh` imports it directly;
-  `go mod tidy` moves it.
-- Go version disagrees in three places: `go.mod` says `1.24.0`, CI pins `1.23`, README says `1.23+`.
+- Go version disagrees: `go.mod` says `1.24.0`, README says `1.23+` (CI and the release workflow
+  both now derive their toolchain from `go.mod`, so only the README claim remains stale).
 - `main.go` and `cmd/root.go` still carry the `Copyright © 2026 NAME HERE <EMAIL ADDRESS>` placeholder.
-- `Makefile` `VERSION?=1.0.0` is stale (current release is 1.4.0) and `.PHONY` omits
-  `fmt`, `vet`, and `check`.
+- `Makefile` `VERSION?=1.0.0` is stale (current release is 1.4.0).
 - `ssh.InsecureIgnoreHostKey()` (`internal/ssh/ssh.go:29`) — no host key verification.
 - Remote shell strings interpolate paths unquoted — an injection surface fed by `rocket.yaml`.
 
