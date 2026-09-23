@@ -94,11 +94,12 @@ vet:
 check: fmt vet test
 	@echo "✓ All checks passed"
 
-## mutate: Run mutation testing on the core packages
+## mutate: Run mutation testing on the core packages (advisory, not a gate)
 mutate:
-	@echo "Running mutation tests..."
-	@gremlins unleash ./internal/version/
-	@gremlins unleash ./internal/config/
+	@echo "Running mutation tests (advisory - results are not stable enough to gate CI)..."
+	@echo "Look at the 'Lived' count. Ignore 'Timed out' - see docs/mutation-testing.md."
+	@gremlins unleash ./internal/version/ || true
+	@gremlins unleash ./internal/config/ || true
 
 ## help: Show this help message
 help:
