@@ -1,4 +1,4 @@
-.PHONY: build clean release install test help
+.PHONY: build clean release install test help fmt vet check mutate
 
 # Binary name
 BINARY_NAME=rocketctl
@@ -93,6 +93,12 @@ vet:
 ## check: Run fmt, vet, and test
 check: fmt vet test
 	@echo "✓ All checks passed"
+
+## mutate: Run mutation testing on the core packages
+mutate:
+	@echo "Running mutation tests..."
+	@gremlins unleash ./internal/version/
+	@gremlins unleash ./internal/config/
 
 ## help: Show this help message
 help:
