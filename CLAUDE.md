@@ -34,8 +34,18 @@ Cobra commands in `cmd/`, logic in `internal/`. Deeper detail: `docs/architectur
 
 ## Testing
 
-There are **zero tests** in this repo, so `make check` proves almost nothing. Verify behaviour by
-hand in a real project with a `rocket.yaml`, and exercise **both** single-service and monorepo modes.
+`internal/config` and `internal/version` have table-driven tests; everything else is verified by
+hand. Stdlib `testing` only — no assertion libraries.
+
+CI gates every PR with `gofmt -l`, `go vet`, and `go test`. `make check` is the local equivalent,
+but its `fmt` step **rewrites** files instead of failing — so a clean `make check` does not mean CI
+will pass. Run `gofmt -l .` before pushing and make sure it prints nothing.
+
+`make mutate` is advisory and local-only: act on `LIVED` mutants, ignore `TIMED OUT` — see
+`docs/mutation-testing.md`.
+
+Commands that shell out to docker, compose, ssh, or aws are still untested. Verify those by hand in
+a real project, exercising **both** single-service and monorepo modes.
 
 ## Conventions
 
