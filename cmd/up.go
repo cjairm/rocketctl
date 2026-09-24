@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/cjairm/rocketctl/internal/compose"
 	"github.com/cjairm/rocketctl/internal/config"
@@ -26,9 +25,12 @@ var upCmd = &cobra.Command{
 }
 
 func init() {
-	upCmd.Flags().BoolVar(&upProdFlag, "prod", false, "Use production configuration (docker-compose.prod.yml)")
-	upCmd.Flags().BoolVar(&upBuildFlag, "build", false, "Rebuild images before starting (dev mode only)")
-	upCmd.Flags().BoolVar(&upNoCacheFlag, "no-cache", false, "Rebuild without cache (requires --build, dev mode only)")
+	upCmd.Flags().
+		BoolVar(&upProdFlag, "prod", false, "Use production configuration (docker-compose.prod.yml)")
+	upCmd.Flags().
+		BoolVar(&upBuildFlag, "build", false, "Rebuild images before starting (dev mode only)")
+	upCmd.Flags().
+		BoolVar(&upNoCacheFlag, "no-cache", false, "Rebuild without cache (requires --build, dev mode only)")
 	rootCmd.AddCommand(upCmd)
 }
 
@@ -118,8 +120,10 @@ func runUp(cmd *cobra.Command, args []string) error {
 
 		// Set environment variable for the service version
 		// docker-compose.prod.yml uses ${SERVICE_VERSION:-latest}
-		envKey := fmt.Sprintf("%s_VERSION", strings.ToUpper(service))
-		os.Setenv(envKey, currentVersion)
+		// Explicitly discarded: Setenv only fails on an invalid key, and
+		// EnvVersionKey always produces a valid one. Written out so errcheck
+		// sees a deliberate discard rather than an accidental one.
+		_ = os.Setenv(config.EnvVersionKey(service), currentVersion)
 	}
 
 	// Start the entire stack using docker compose

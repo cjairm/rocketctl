@@ -5,9 +5,12 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/cjairm/rocketctl/internal/config"
 	"github.com/cjairm/rocketctl/internal/ssh"
+	"github.com/cjairm/rocketctl/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -28,6 +31,50 @@ func init() {
 	rootCmd.AddCommand(deployCmd)
 }
 
+// versionEnvAssignments renders the environment prefix that pins each service's
+// image tag for the remote compose commands, e.g.
+// "API_VERSION='0.1.4' WEB_VERSION='2.0.1' ".
+//
+// Without it the generated compose file falls back to ":latest", a tag that
+// build and push never create. Services are sorted so the command is stable
+// and readable in the deploy output.
+func versionEnvAssignments(serviceVersions map[string]string) string {
+	services := make([]string, 0, len(serviceVersions))
+	for service := range serviceVersions {
+		services = append(services, service)
+	}
+	sort.Strings(services)
+
+	var b strings.Builder
+	for _, service := range services {
+		fmt.Fprintf(
+			&b,
+			"%s=%s ",
+			config.EnvVersionKey(service),
+			ssh.ShellQuote(serviceVersions[service]),
+		)
+	}
+	return b.String()
+}
+
+// collectServiceVersions reads the local .rocket-version for every service so
+// the remote pulls exactly what the last build produced.
+func collectServiceVersions(cfg *config.Config) (map[string]string, error) {
+	versions := make(map[string]string, len(cfg.GetServices()))
+	for _, service := range cfg.GetServices() {
+		versionPath, err := cfg.GetVersionFilePath(service)
+		if err != nil {
+			return nil, err
+		}
+		ver, err := version.Get(versionPath)
+		if err != nil {
+			return nil, err
+		}
+		versions[service] = ver
+	}
+	return versions, nil
+}
+
 func runDeploy(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -38,6 +85,16 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 			"server IP is required for deployment. Please run 'rocketctl init' to configure it",
 		)
 	}
+	serviceVersions, err := collectServiceVersions(cfg)
+	if err != nil {
+		return err
+	}
+	versionEnv := versionEnvAssignments(serviceVersions)
+	fmt.Println("📌 Deploying versions:")
+	for _, service := range cfg.GetServices() {
+		fmt.Printf("   %s %s\n", service, serviceVersions[service])
+	}
+
 	sshUser := cfg.SSHUser
 	if sshUser == "" {
 		currentUser, err := user.Current()
@@ -63,7 +120,11 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create remote directory structure
-	remoteDir := fmt.Sprintf("~/apps/%s", cfg.Project)
+	// The "~" stays outside the quotes so the remote shell still expands it.
+	remoteDir := "~/apps/" + ssh.ShellQuote(cfg.Project)
+	// Unquoted twin, only for the copy-pasteable hints printed at the end.
+	// Safe to show because Validate restricts Project to [A-Za-z0-9._-].
+	remoteDirDisplay := fmt.Sprintf("~/apps/%s", cfg.Project)
 	fmt.Printf("📁 Creating directory structure: %s\n", remoteDir)
 	if err := client.MkdirAll(remoteDir); err != nil {
 		return err
@@ -152,9 +213,15 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 				}
 			} else {
 				if service != "" {
-					fmt.Printf("⚠️  %s/.env.example not found and %s/.env doesn't exist on server\n", service, service)
+					fmt.Printf(
+						"⚠️  %s/.env.example not found and %s/.env doesn't exist on server\n",
+						service,
+						service,
+					)
 				} else {
-					fmt.Println("⚠️  .env.example not found in project directory and .env doesn't exist on server")
+					fmt.Println(
+						"⚠️  .env.example not found in project directory and .env doesn't exist on server",
+					)
 					fmt.Println("⚠️  You may need to manually create .env on the server")
 				}
 			}
@@ -196,14 +263,18 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	// Pull latest images
 	fmt.Println("📥 Pulling latest images...")
 	pullCmd := "docker compose pull"
-	if err := client.ExecInteractive(fmt.Sprintf("cd %s && %s", remoteDir, pullCmd)); err != nil {
+	if err := client.ExecInteractive(
+		fmt.Sprintf("cd %s && %s%s", remoteDir, versionEnv, pullCmd),
+	); err != nil {
 		return fmt.Errorf("failed to pull images: %w", err)
 	}
 
 	// Start services
 	fmt.Println("🚀 Starting services...")
 	upCmd := "docker compose up -d"
-	if err := client.ExecInteractive(fmt.Sprintf("cd %s && %s", remoteDir, upCmd)); err != nil {
+	if err := client.ExecInteractive(
+		fmt.Sprintf("cd %s && %s%s", remoteDir, versionEnv, upCmd),
+	); err != nil {
 		return fmt.Errorf("failed to start services: %w", err)
 	}
 
@@ -212,13 +283,13 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		"\n📊 To view logs: ssh %s@%s 'cd %s && docker compose logs -f'\n",
 		sshUser,
 		cfg.IP,
-		remoteDir,
+		remoteDirDisplay,
 	)
 	fmt.Printf(
 		"📊 To view status: ssh %s@%s 'cd %s && docker compose ps'\n",
 		sshUser,
 		cfg.IP,
-		remoteDir,
+		remoteDirDisplay,
 	)
 
 	return nil

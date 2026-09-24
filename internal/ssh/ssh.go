@@ -101,7 +101,9 @@ func (c *Client) UploadFile(localPath, remotePath string) error {
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
 	// Start command to write file
-	if err := session.Start(fmt.Sprintf("cat > %s && chmod %o %s", remotePath, info.Mode().Perm(), remotePath)); err != nil {
+	if err := session.Start(
+		fmt.Sprintf("cat > %s && chmod %o %s", remotePath, info.Mode().Perm(), remotePath),
+	); err != nil {
 		return fmt.Errorf("failed to start upload command: %w", err)
 	}
 	// Write file content
@@ -195,4 +197,13 @@ func getAuthMethods(customKeyPath string) ([]ssh.AuthMethod, error) {
 		)
 	}
 	return methods, nil
+}
+
+// ShellQuote wraps s in single quotes so a remote shell takes it as one
+// literal argument. Embedded single quotes are closed, escaped and reopened.
+//
+// Callers must keep a leading "~" outside the quotes - a quoted tilde is not
+// expanded, and the remote shell would create a literal "~" directory.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
