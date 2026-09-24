@@ -14,8 +14,13 @@ concurrency:
 
 jobs:
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macOS is the only release target, so it has to gate PRs too.
+        os: [ubuntu-latest, macos-latest]
 
     steps:
       - name: Checkout code
@@ -38,4 +43,24 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test ./...
+        run: go test -race ./...
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: golangci-lint
+        # v8 is the first action major that works with golangci-lint >= v2.1.0;
+        # v6 drives golangci-lint v1 only and would fail to install v2 at all.
+        # The version is pinned so CI and local runs agree - bump both together.
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.2

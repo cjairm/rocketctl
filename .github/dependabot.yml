@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # golang.org/x/crypto carries the SSH client, so security updates matter here.
+  - package-ecosystem: gomod
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

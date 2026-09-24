@@ -50,7 +50,7 @@ func GenerateDockerComposeProd(data TemplateData, outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create docker-compose.prod.yml: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	if err := tmpl.Execute(file, data); err != nil {
 		return fmt.Errorf("failed to execute docker-compose.prod.yml template: %w", err)
 	}
@@ -75,7 +75,7 @@ func GenerateCaddyfile(data TemplateData, outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create Caddyfile: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if err := tmpl.Execute(file, data); err != nil {
 		return fmt.Errorf("failed to execute Caddyfile template: %w", err)
@@ -96,7 +96,7 @@ func GenerateEnvProductionExample(data TemplateData, outputPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create .env.production.example: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	if err := tmpl.Execute(file, data); err != nil {
 		return fmt.Errorf("failed to execute .env.production.example template: %w", err)

@@ -132,7 +132,7 @@ func (c *Client) Exec(command string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 	output, err := session.CombinedOutput(command)
 	if err != nil {
 		return string(output), fmt.Errorf("command failed: %w\nOutput: %s", err, string(output))
@@ -146,7 +146,7 @@ func (c *Client) ExecInteractive(command string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 	// Set up output streams
 	session.Stdout = os.Stdout
 	session.Stderr = os.Stderr
@@ -229,7 +229,7 @@ func (c *Client) FileExists(path string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to create session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// test -f returns exit code 0 if file exists, 1 if it doesn't
 	err = session.Run(fmt.Sprintf("test -f %s", path))
