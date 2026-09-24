@@ -217,15 +217,6 @@ func (c *Config) GetFullImageName(service, version string) string {
 	return fmt.Sprintf("%s/%s:%s", c.Registry, c.GetImageName(service), version)
 }
 
-// GetEnvProductionPath returns the path to .env.production for a service
-func (c *Config) GetEnvProductionPath(service string) (string, error) {
-	serviceDir, err := c.GetServiceDirectory(service)
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(serviceDir, ".env.production"), nil
-}
-
 // GetDockerfilePath returns the path to a Dockerfile for a service
 func (c *Config) GetDockerfilePath(service string, production bool) (string, error) {
 	serviceDir, err := c.GetServiceDirectory(service)

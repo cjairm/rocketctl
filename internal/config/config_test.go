@@ -161,16 +161,6 @@ func TestPathDerivation(t *testing.T) {
 			got:  func() (string, error) { return monorepo().GetDockerfilePath("api", true) },
 			want: "api/Dockerfile.production",
 		},
-		{
-			name: "single service env production path",
-			got:  func() (string, error) { return singleService().GetEnvProductionPath("backend") },
-			want: ".env.production",
-		},
-		{
-			name: "monorepo env production path",
-			got:  func() (string, error) { return monorepo().GetEnvProductionPath("api") },
-			want: "api/.env.production",
-		},
 	}
 
 	for _, tt := range tests {

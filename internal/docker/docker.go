@@ -87,34 +87,6 @@ func Push(image, tag string) error {
 	return nil
 }
 
-// Run runs a container from an image
-func Run(image, tag string, envFile string, detached bool, additionalArgs ...string) (string, error) {
-	args := []string{"run"}
-
-	if detached {
-		args = append(args, "-d")
-	}
-
-	args = append(args, "--rm")
-
-	if envFile != "" {
-		args = append(args, "--env-file", envFile)
-	}
-
-	args = append(args, additionalArgs...)
-	args = append(args, fmt.Sprintf("%s:%s", image, tag))
-
-	cmd := exec.Command("docker", args...)
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("docker run failed: %w", err)
-	}
-
-	containerID := strings.TrimSpace(string(output))
-	fmt.Printf("✓ Container started: %s\n", containerID)
-	return containerID, nil
-}
-
 // ListImages lists Docker images matching a pattern
 func ListImages(pattern string) ([]string, error) {
 	cmd := exec.Command("docker", "images", "--format", "{{.Repository}}:{{.Tag}}", "--filter", fmt.Sprintf("reference=%s", pattern))
@@ -142,43 +114,6 @@ func RemoveImage(image string) error {
 		return fmt.Errorf("failed to remove image %s: %w", image, err)
 	}
 	return nil
-}
-
-// LoadEnvFile loads a .env file and returns it as a map
-func LoadEnvFile(path string) (map[string]string, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to open env file: %w", err)
-	}
-	defer func() { _ = file.Close() }()
-
-	envVars := make(map[string]string)
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		// Skip empty lines and comments
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		// Parse KEY=VALUE
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			key := strings.TrimSpace(parts[0])
-			value := strings.TrimSpace(parts[1])
-			envVars[key] = value
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("error reading env file: %w", err)
-	}
-
-	return envVars, nil
 }
 
 // MatchesAnyCurrent reports whether image is one of the current images.

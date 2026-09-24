@@ -17,9 +17,6 @@ var dockerComposeProdTemplate string
 //go:embed Caddyfile.tmpl
 var caddyfileTemplate string
 
-//go:embed env.production.example.tmpl
-var envExampleTemplate string
-
 // composeFuncs is shared by both compose renderers so the version variable
 // spelled in the template can never drift from the one the Go code sets.
 var composeFuncs = template.FuncMap{
@@ -85,27 +82,6 @@ func GenerateCaddyfile(data TemplateData, outputPath string) error {
 	return nil
 }
 
-// GenerateEnvProductionExample generates .env.production.example for a service
-func GenerateEnvProductionExample(data TemplateData, outputPath string) error {
-	tmpl, err := template.New("env.production.example").Parse(envExampleTemplate)
-	if err != nil {
-		return fmt.Errorf("failed to parse .env.production.example template: %w", err)
-	}
-
-	file, err := os.Create(outputPath)
-	if err != nil {
-		return fmt.Errorf("failed to create .env.production.example: %w", err)
-	}
-	defer func() { _ = file.Close() }()
-
-	if err := tmpl.Execute(file, data); err != nil {
-		return fmt.Errorf("failed to execute .env.production.example template: %w", err)
-	}
-
-	fmt.Printf("✓ Generated %s\n", outputPath)
-	return nil
-}
-
 // RenderDockerComposeProd renders docker-compose.prod.yml template to a string
 func RenderDockerComposeProd(data TemplateData) (string, error) {
 	tmpl, err := template.New("docker-compose.prod.yml").
@@ -118,32 +94,5 @@ func RenderDockerComposeProd(data TemplateData) (string, error) {
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("failed to execute docker-compose.prod.yml template: %w", err)
 	}
-	return buf.String(), nil
-}
-
-// RenderCaddyfile renders Caddyfile template to a string
-func RenderCaddyfile(data TemplateData) (string, error) {
-	tmpl, err := template.New("Caddyfile").Parse(caddyfileTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse Caddyfile template: %w", err)
-	}
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("failed to execute Caddyfile template: %w", err)
-	}
-	return buf.String(), nil
-}
-
-// RenderEnvExample renders .env.example template to a string
-func RenderEnvExample(data TemplateData) (string, error) {
-	tmpl, err := template.New("env.example").Parse(envExampleTemplate)
-	if err != nil {
-		return "", fmt.Errorf("failed to parse .env.example template: %w", err)
-	}
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return "", fmt.Errorf("failed to execute .env.example template: %w", err)
-	}
-
 	return buf.String(), nil
 }

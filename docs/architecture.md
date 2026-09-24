@@ -69,7 +69,9 @@ Derived values. Note `filepath.Join` **cleans** its result, so a monorepo servic
 3. Upload `docker-compose.prod.yml` as `docker-compose.yml`.
 4. Upload `caddy/Caddyfile` if `domain` is set and the file exists.
 5. Upload `.env.example` → `.env` per service, only when `.env` is absent on the server.
-6. Run ECR login, `docker compose pull`, `docker compose up -d` remotely.
+6. Run ECR login, then `docker compose pull` and `docker compose up -d` remotely with each
+   service's `<SERVICE>_VERSION` set from its local `.rocket-version`, so the server runs the
+   version that was built rather than falling back to `:latest`.
 
 Uploads use a stdin pipe into `cat > path`, not SCP. There is no rollback, no dry-run, and no
 backup of the files it overwrites.
@@ -81,9 +83,10 @@ Default goal is `help`. Releases are macOS-only (`darwin/amd64`, `darwin/arm64`)
 
 Tagging `v*` triggers `.github/workflows/release.yml`, which builds both binaries, generates
 checksums, slices the matching section out of `CHANGELOG.md`, and publishes a GitHub Release. The
-release workflow runs no tests, vet, or fmt check. `.github/workflows/ci.yml` gates pull requests
-and pushes to `main` with `gofmt -l`, `go vet`, and `go test` — see the "Testing" section in
-`CLAUDE.md`.
+release workflow builds both binaries and asserts the built binary reports the tag it was built
+from. `.github/workflows/ci.yml` gates pull requests and pushes to `main` with `gofmt -l`,
+`go vet`, and `go test -race` on both `ubuntu-latest` and `macos-latest`, plus a `golangci-lint`
+job — see the "Testing" section in `CLAUDE.md`.
 
 ## Known defects
 
@@ -92,9 +95,6 @@ Verified against the tree, worth fixing:
 - Go version disagrees: `go.mod` says `1.24.0`, README says `1.23+` (CI and the release workflow
   both now derive their toolchain from `go.mod`, so only the README claim remains stale).
 - `main.go` and `cmd/root.go` still carry the `Copyright © 2026 NAME HERE <EMAIL ADDRESS>` placeholder.
-- `Makefile` `VERSION?=1.0.0` is stale (current release is 1.4.0).
-- `ssh.InsecureIgnoreHostKey()` (`internal/ssh/ssh.go:29`) — no host key verification.
-- Remote shell strings interpolate paths unquoted — an injection surface fed by `rocket.yaml`.
 
 ## Out of scope by decision
 

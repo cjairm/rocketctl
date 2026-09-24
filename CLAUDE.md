@@ -8,7 +8,7 @@ Cobra commands in `cmd/`, logic in `internal/`. Deeper detail: `docs/architectur
 - **`rocket.yaml` is the only input.** Every command calls `config.Load()` itself — there is no
   global config, no persistent root flags, no context passing. Keep it that way.
 - **Never build paths or image names by hand.** Use the `Config` methods:
-  `GetServiceDirectory`, `GetVersionFilePath`, `GetDockerfilePath`, `GetEnvProductionPath`,
+  `GetServiceDirectory`, `GetVersionFilePath`, `GetDockerfilePath`, `EnvVersionKey`,
   `GetImageName`, `GetFullImageName`. The `<project>_<service>:<version>` scheme is not configurable.
 - **Handle both repo modes.** `cfg.IsMonorepo()` decides: monorepo requires an explicit service arg
   and resolves to `./<service>/`; single-service infers from `cfg.Service` and resolves to `.`.
@@ -24,10 +24,11 @@ Cobra commands in `cmd/`, logic in `internal/`. Deeper detail: `docs/architectur
   reading. Intentional — don't "fix" it.
 - **`rocketctl deploy` runs on a remote server and has no dry-run and no rollback.** It uploads
   files and restarts services over SSH. Never add auto-execution or widen its blast radius casually.
-- **Remote paths are interpolated unquoted into shell strings** (`ssh.go` `mkdir -p %s`, `cat > %s`,
-  `test -f %s`; `deploy.go` `cd %s && ...`). `cfg.Project` flows straight in. Quote or validate any
-  new value you put on that path.
-- **Host keys are not verified** — `ssh.InsecureIgnoreHostKey()` at `internal/ssh/ssh.go:29`.
+- **Remote paths are shell-quoted, not sanitised by luck.** `ssh.ShellQuote` wraps values that
+  reach a remote shell, and `config.Validate` restricts `project`/`service` to
+  `[A-Za-z0-9._-]`. Keep a leading `~` OUTSIDE the quotes - a quoted tilde is not expanded.
+- **Host keys are verified** against `~/.ssh/known_hosts` with a trust-on-first-use prompt;
+  `insecure_skip_host_key_check: true` opts out.
 - **AWS ECR is the only registry, macOS the only release target.** Both are deliberate scope limits.
 - **Templates are `go:embed`ed and generated once by `init`.** Users edit the output, not the
   templates. Don't add a regenerate command that would overwrite their edits.

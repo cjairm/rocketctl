@@ -207,7 +207,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("\nNext steps:")
 	fmt.Println("1. Create Dockerfile and Dockerfile.production for each service")
 	fmt.Println("2. Create docker-compose.yml for your development environment")
-	fmt.Println("3. Create .env.production on the server with the required secrets")
+	fmt.Println("3. Create .env.example with the variables your services need")
+	fmt.Println("   (deploy uploads it as .env on the server the first time)")
 	fmt.Println("4. Customize docker-compose.prod.yml as needed")
 	if cfg.Domain != "" {
 		fmt.Println("5. Customize caddy/Caddyfile as needed")

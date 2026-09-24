@@ -84,7 +84,7 @@ RocketCTL expects `Dockerfile` (dev) and `Dockerfile.production` (production) in
 
 ### 3. Set Up Environment
 
-Create `.env.production` on your server with runtime secrets. This file is injected at runtime via `env_file` in `docker-compose.prod.yml` -- never commit it to git.
+Create `.env.example` (per service in a monorepo) with the variables your services need. On the first deploy, `rocketctl deploy` uploads it to the server as `.env` (mode 0600) and never overwrites it afterwards, so edit the real values on the server. The `.env` is injected at runtime via `env_file` in `docker-compose.prod.yml` -- never commit secrets to git.
 
 ### 4. Build, Push, Deploy
 
@@ -145,7 +145,7 @@ Versions are stored in `.rocket-version` files (one per service). The version is
 
 - `.env` -- Shared/fallback values
 - `.env.development` -- Dev-specific values
-- `.env.production` -- Runtime secrets (not in git, created manually on server, injected via `env_file`)
+- `.env.example` -- Template uploaded by `deploy` as `.env` on the server on first deploy (real secrets live only in the server's `.env`, injected via `env_file`)
 
 ### Folder Structure
 
@@ -161,12 +161,12 @@ project/
     Dockerfile
     Dockerfile.production
     .rocket-version
-    .env.production
+    .env.example
   web/
     Dockerfile
     Dockerfile.production
     .rocket-version
-    .env.production
+    .env.example
 ```
 
 **Single-Service:**
@@ -179,7 +179,7 @@ project/
   Dockerfile
   Dockerfile.production
   .rocket-version
-  .env.production
+  .env.example
 ```
 
 ## Commands

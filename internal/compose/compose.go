@@ -81,23 +81,6 @@ func Logs(composeFile string, service string, follow bool) error {
 	return cmd.Run()
 }
 
-// Pull pulls images for services
-func Pull(composeFile string) error {
-	args := []string{"compose"}
-
-	if composeFile != "" {
-		args = append(args, "-f", composeFile)
-	}
-
-	args = append(args, "pull")
-
-	cmd := exec.Command("docker", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	return cmd.Run()
-}
-
 // Exec executes a command in a running container
 func Exec(containerName string, command []string) error {
 	args := []string{"exec", "-it", containerName}
