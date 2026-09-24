@@ -107,7 +107,7 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 
 	// Connect to server via SSH
 	fmt.Println("📡 Connecting to server...")
-	client, err := ssh.Connect(cfg.IP, sshUser, cfg.SSHKeyPath)
+	client, err := ssh.Connect(cfg.IP, sshUser, cfg.SSHKeyPath, cfg.InsecureSkipHostKeyCheck)
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}

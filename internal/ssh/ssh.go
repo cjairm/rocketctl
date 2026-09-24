@@ -1,13 +1,17 @@
 package ssh
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 // Client represents an SSH connection
@@ -15,18 +19,97 @@ type Client struct {
 	client *ssh.Client
 }
 
+// hostKeyCallback verifies the server against ~/.ssh/known_hosts. An unknown
+// host is recorded after the user confirms (trust on first use); a key that
+// changed is always a hard failure, because that is what a MITM looks like.
+func hostKeyCallback(insecure bool) (ssh.HostKeyCallback, error) {
+	if insecure {
+		fmt.Println("⚠️  Host key verification disabled (insecure_skip_host_key_check: true)")
+		return ssh.InsecureIgnoreHostKey(), nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to locate home directory for known_hosts: %w", err)
+	}
+	khPath := filepath.Join(home, ".ssh", "known_hosts")
+	if err := os.MkdirAll(filepath.Dir(khPath), 0o700); err != nil {
+		return nil, fmt.Errorf("failed to create %s: %w", filepath.Dir(khPath), err)
+	}
+	// knownhosts.New fails on a missing file, so make sure one exists.
+	f, err := os.OpenFile(khPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open %s: %w", khPath, err)
+	}
+	_ = f.Close()
+
+	verify, err := knownhosts.New(khPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", khPath, err)
+	}
+
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		if err := verify(hostname, remote, key); err != nil {
+			var keyErr *knownhosts.KeyError
+			// Want is empty when the host is simply unknown; non-empty means
+			// the recorded key did not match.
+			if errors.As(err, &keyErr) && len(keyErr.Want) == 0 {
+				return trustOnFirstUse(khPath, hostname, key)
+			}
+			return fmt.Errorf(
+				"host key verification failed for %s: %w\n"+
+					"If the server was rebuilt on purpose, remove its line from %s and deploy again",
+				hostname, err, khPath,
+			)
+		}
+		return nil
+	}, nil
+}
+
+// trustOnFirstUse shows the fingerprint and records the key once the user
+// types "yes", mirroring what OpenSSH does on a first connection.
+func trustOnFirstUse(khPath, hostname string, key ssh.PublicKey) error {
+	fmt.Printf("\nThe authenticity of host %s can't be established.\n", hostname)
+	fmt.Printf("%s key fingerprint is %s\n", key.Type(), ssh.FingerprintSHA256(key))
+	fmt.Print("Are you sure you want to continue connecting? (yes/no): ")
+
+	answer, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read confirmation: %w", err)
+	}
+	if strings.TrimSpace(strings.ToLower(answer)) != "yes" {
+		return fmt.Errorf("host key not accepted, aborting deploy")
+	}
+
+	f, err := os.OpenFile(khPath, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("failed to open %s for append: %w", khPath, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	line := knownhosts.Line([]string{knownhosts.Normalize(hostname)}, key)
+	if _, err := f.WriteString(line + "\n"); err != nil {
+		return fmt.Errorf("failed to record host key in %s: %w", khPath, err)
+	}
+	fmt.Printf("✓ Added %s to %s\n", hostname, khPath)
+	return nil
+}
+
 // Connect establishes an SSH connection to the given host
 // If keyPath is empty, it will look for default keys in ~/.ssh/
-func Connect(host, user, keyPath string) (*Client, error) {
+func Connect(host, user, keyPath string, insecureHostKey bool) (*Client, error) {
 	authMethods, err := getAuthMethods(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get SSH auth methods: %w", err)
 	}
+	hostKeys, err := hostKeyCallback(insecureHostKey)
+	if err != nil {
+		return nil, err
+	}
 	config := &ssh.ClientConfig{
-		User: user,
-		Auth: authMethods,
-		// TODO: Consider using known_hosts
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		User:            user,
+		Auth:            authMethods,
+		HostKeyCallback: hostKeys,
 	}
 	if !strings.Contains(host, ":") {
 		host = host + ":22"

@@ -22,6 +22,8 @@ type Config struct {
 	IP         string   `yaml:"ip,omitempty"`           // Server IP for SSH deployment
 	SSHUser    string   `yaml:"ssh_user,omitempty"`     // SSH user (defaults to current user)
 	SSHKeyPath string   `yaml:"ssh_key_path,omitempty"` // Custom SSH key path (e.g., ~/my-key.pem)
+
+	InsecureSkipHostKeyCheck bool `yaml:"insecure_skip_host_key_check,omitempty"` // Opt out of known_hosts verification
 }
 
 // Load reads and parses the rocket.yaml file from the current directory
