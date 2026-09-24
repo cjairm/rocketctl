@@ -197,7 +197,12 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 				} else {
 					fmt.Println("📤 Uploading .env from .env.example...")
 				}
-				if err := client.UploadFile(localEnvExamplePath, remoteDotEnvPath); err != nil {
+				// 0600: this file holds production secrets.
+				if err := client.UploadFileMode(
+					localEnvExamplePath,
+					remoteDotEnvPath,
+					0o600,
+				); err != nil {
 					if service != "" {
 						return fmt.Errorf("failed to upload %s/.env: %w", service, err)
 					}

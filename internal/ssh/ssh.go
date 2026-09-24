@@ -156,49 +156,62 @@ func (c *Client) ExecInteractive(command string) error {
 	return nil
 }
 
-// UploadFile uploads a local file to a remote path
+// UploadFile uploads a local file to a remote path, preserving its mode.
 func (c *Client) UploadFile(localPath, remotePath string) error {
-	data, err := os.ReadFile(localPath)
-	if err != nil {
-		return fmt.Errorf("failed to read local file %s: %w", localPath, err)
-	}
-	// Get file info for permissions
 	info, err := os.Stat(localPath)
 	if err != nil {
 		return fmt.Errorf("failed to stat local file %s: %w", localPath, err)
 	}
+	return c.UploadFileMode(localPath, remotePath, info.Mode().Perm())
+}
+
+// UploadFileMode uploads a local file and forces the remote permissions, which
+// matters for secrets: a 0644 .env.example must not become a 0644 .env.
+func (c *Client) UploadFileMode(localPath, remotePath string, mode os.FileMode) error {
+	local, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to read local file %s: %w", localPath, err)
+	}
+	// Wrapped rather than a bare `defer local.Close()` so errcheck sees a
+	// deliberate discard.
+	defer func() { _ = local.Close() }()
+
 	// Create remote directory if needed
 	remoteDir := filepath.Dir(remotePath)
-	if _, err := c.Exec(fmt.Sprintf("mkdir -p %s", remoteDir)); err != nil {
-		return fmt.Errorf("failed to create remote directory %s: %w", remoteDir, err)
+	if err := c.MkdirAll(remoteDir); err != nil {
+		return err
 	}
-	// Use SCP-like approach: write file content via cat
+
 	session, err := c.client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
-	defer session.Close()
-	// Set up stdin pipe
+	defer func() { _ = session.Close() }()
+
 	stdin, err := session.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
-	// Start command to write file
-	if err := session.Start(
-		fmt.Sprintf("cat > %s && chmod %o %s", remotePath, info.Mode().Perm(), remotePath),
-	); err != nil {
+
+	// Create the file with the right mode before any bytes land in it, so the
+	// contents are never briefly readable by other users.
+	cmd := fmt.Sprintf(
+		"umask 077 && cat > %s && chmod %o %s",
+		remotePath, mode, remotePath,
+	)
+	if err := session.Start(cmd); err != nil {
 		return fmt.Errorf("failed to start upload command: %w", err)
 	}
-	// Write file content
-	if _, err := io.Copy(stdin, strings.NewReader(string(data))); err != nil {
+	if _, err := io.Copy(stdin, local); err != nil {
 		return fmt.Errorf("failed to write file content: %w", err)
 	}
-	stdin.Close()
-	// Wait for command to complete
+	// Explicit discard, not a bare stdin.Close(): the remote command's real
+	// outcome comes from session.Wait() below.
+	_ = stdin.Close()
+
 	if err := session.Wait(); err != nil {
 		return fmt.Errorf("upload command failed: %w", err)
 	}
-
 	return nil
 }
 
