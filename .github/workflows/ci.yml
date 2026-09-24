@@ -61,6 +61,6 @@ jobs:
         # v8 is the first action major that works with golangci-lint >= v2.1.0;
         # v6 drives golangci-lint v1 only and would fail to install v2 at all.
         # The version is pinned so CI and local runs agree - bump both together.
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
