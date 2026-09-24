@@ -1,5 +1,3 @@
-version: '3.8'
-
 networks:
   {{.Project}}-network:
     driver: bridge
@@ -28,7 +26,7 @@ services:
 
 {{- range .Services}}
   {{$.Project}}-{{.}}:
-    image: {{$.Registry}}/{{$.Project}}_{{.}}:${{"{"}}{{. | upper}}_VERSION:-latest{{"}"}}
+    image: {{$.Registry}}/{{$.Project}}_{{.}}:${{"{"}}{{. | envkey}}:-latest{{"}"}}
     container_name: {{$.Project}}-{{.}}
     restart: unless-stopped
     env_file:

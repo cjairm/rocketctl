@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"text/template"
+
+	"github.com/cjairm/rocketctl/internal/config"
 )
 
 //go:embed docker-compose.prod.yml.tmpl
@@ -18,6 +19,12 @@ var caddyfileTemplate string
 
 //go:embed env.production.example.tmpl
 var envExampleTemplate string
+
+// composeFuncs is shared by both compose renderers so the version variable
+// spelled in the template can never drift from the one the Go code sets.
+var composeFuncs = template.FuncMap{
+	"envkey": config.EnvVersionKey,
+}
 
 // TemplateData holds data for template rendering
 type TemplateData struct {
@@ -33,11 +40,8 @@ type TemplateData struct {
 
 // GenerateDockerComposeProd generates docker-compose.prod.yml
 func GenerateDockerComposeProd(data TemplateData, outputPath string) error {
-	funcMap := template.FuncMap{
-		"upper": strings.ToUpper,
-	}
 	tmpl, err := template.New("docker-compose.prod.yml").
-		Funcs(funcMap).
+		Funcs(composeFuncs).
 		Parse(dockerComposeProdTemplate)
 	if err != nil {
 		return fmt.Errorf("failed to parse docker-compose.prod.yml template: %w", err)
@@ -58,7 +62,7 @@ func GenerateDockerComposeProd(data TemplateData, outputPath string) error {
 func GenerateCaddyfile(data TemplateData, outputPath string) error {
 	// Create caddy directory if it doesn't exist
 	caddyDir := filepath.Dir(outputPath)
-	if err := os.MkdirAll(caddyDir, 0755); err != nil {
+	if err := os.MkdirAll(caddyDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create caddy directory: %w", err)
 	}
 
@@ -104,11 +108,8 @@ func GenerateEnvProductionExample(data TemplateData, outputPath string) error {
 
 // RenderDockerComposeProd renders docker-compose.prod.yml template to a string
 func RenderDockerComposeProd(data TemplateData) (string, error) {
-	funcMap := template.FuncMap{
-		"upper": strings.ToUpper,
-	}
 	tmpl, err := template.New("docker-compose.prod.yml").
-		Funcs(funcMap).
+		Funcs(composeFuncs).
 		Parse(dockerComposeProdTemplate)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse docker-compose.prod.yml template: %w", err)
