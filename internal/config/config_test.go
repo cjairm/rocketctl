@@ -259,3 +259,97 @@ func TestSaveWritesALoadableConfig(t *testing.T) {
 		t.Errorf("round-tripped config = %+v, want monorepo with 2 services", cfg)
 	}
 }
+
+func TestEnvVersionKey(t *testing.T) {
+	tests := []struct {
+		service string
+		want    string
+	}{
+		{"api", "API_VERSION"},
+		{"my-api", "MY_API_VERSION"},
+		{"web.ui", "WEB_UI_VERSION"},
+		{"Api2", "API2_VERSION"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.service, func(t *testing.T) {
+			if got := EnvVersionKey(tt.service); got != tt.want {
+				t.Errorf("EnvVersionKey(%q) = %q, want %q", tt.service, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateRejectsUnsafeNames(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     *Config
+		wantErr bool
+	}{
+		{
+			name:    "shell metacharacters in project",
+			cfg:     &Config{Project: "a;touch /tmp/pwned", Service: "backend", Registry: "reg.example.com", Region: "us-east-2"},
+			wantErr: true,
+		},
+		{
+			name:    "command substitution in project",
+			cfg:     &Config{Project: "$(id)", Service: "backend", Registry: "reg.example.com", Region: "us-east-2"},
+			wantErr: true,
+		},
+		{
+			name:    "empty service in monorepo list",
+			cfg:     &Config{Project: "myapp", Services: []string{"api", "", "web"}, Registry: "reg.example.com", Region: "us-east-2"},
+			wantErr: true,
+		},
+		{
+			name:    "path traversal in service name",
+			cfg:     &Config{Project: "myapp", Services: []string{"api/../etc"}, Registry: "reg.example.com", Region: "us-east-2"},
+			wantErr: true,
+		},
+		{
+			name:    "hyphens and dots stay legal",
+			cfg:     &Config{Project: "my.app", Services: []string{"my-api", "web"}, Registry: "reg.example.com", Region: "us-east-2"},
+			wantErr: false,
+		},
+		{
+			name:    "plain single service stays legal",
+			cfg:     &Config{Project: "myapp", Service: "backend", Registry: "reg.example.com", Region: "us-east-2"},
+			wantErr: false,
+		},
+		{
+			name:    "injection via registry",
+			cfg:     &Config{Project: "myapp", Service: "backend", Registry: "reg.example.com;id", Region: "us-east-2"},
+			wantErr: true,
+		},
+		{
+			name:    "injection via region",
+			cfg:     &Config{Project: "myapp", Service: "backend", Registry: "reg.example.com", Region: "us-east-2 $(id)"},
+			wantErr: true,
+		},
+		{
+			name:    "real ECR registry stays legal",
+			cfg:     &Config{Project: "myapp", Service: "backend", Registry: "123456789.dkr.ecr.us-east-2.amazonaws.com", Region: "us-east-2"},
+			wantErr: false,
+		},
+		{
+			name:    "registry with an explicit port stays legal",
+			cfg:     &Config{Project: "myapp", Service: "backend", Registry: "reg.example.com:5000", Region: "us-east-2"},
+			wantErr: false,
+		},
+		{
+			name:    "services colliding on one compose variable",
+			cfg:     &Config{Project: "myapp", Services: []string{"my-api", "my.api"}, Registry: "reg.example.com", Region: "us-east-2"},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.cfg.Validate()
+			if tt.wantErr && err == nil {
+				t.Error("expected an error, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("expected no error, got %v", err)
+			}
+		})
+	}
+}

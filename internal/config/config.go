@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -65,7 +67,92 @@ func (c *Config) Validate() error {
 		)
 	}
 
+	if err := validateName("project", c.Project); err != nil {
+		return err
+	}
+	if err := validateHost("registry", c.Registry); err != nil {
+		return err
+	}
+	if err := validateName("region", c.Region); err != nil {
+		return err
+	}
+
+	// Two services whose names differ only by '-', '.' or '_' would share one
+	// compose variable, silently pinning both to whichever version is written
+	// last. Reject that here rather than deploying the wrong image.
+	seen := make(map[string]string, len(c.Services))
+	for _, service := range c.GetServices() {
+		if err := validateName("service", service); err != nil {
+			return err
+		}
+		key := EnvVersionKey(service)
+		if other, ok := seen[key]; ok {
+			return fmt.Errorf(
+				"services %q and %q both map to the compose variable %s in rocket.yaml: rename one so their versions can be pinned independently",
+				other,
+				service,
+				key,
+			)
+		}
+		seen[key] = service
+	}
+
 	return nil
+}
+
+// namePattern matches names that are safe everywhere RocketCTL puts them: a
+// Docker image component, a remote shell path segment and a compose variable.
+var namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// hostPattern matches a registry host, optionally with a port. Registry and
+// region are interpolated unquoted into the remote ECR login command, so they
+// need the same treatment as project and service names.
+var hostPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]*(:[0-9]+)?$`)
+
+// validateName rejects names that would be unsafe once interpolated into a
+// remote shell command or an image reference.
+func validateName(kind, name string) error {
+	if name == "" {
+		return fmt.Errorf("%s name cannot be empty in rocket.yaml", kind)
+	}
+	if !namePattern.MatchString(name) {
+		return fmt.Errorf(
+			"invalid %s name %q in rocket.yaml: use only letters, digits, '.', '_' and '-', starting with a letter or digit",
+			kind,
+			name,
+		)
+	}
+	return nil
+}
+
+// validateHost rejects a registry or region that would be unsafe once
+// interpolated into the remote "aws ecr get-login-password ... | docker login"
+// command.
+func validateHost(kind, value string) error {
+	if !hostPattern.MatchString(value) {
+		return fmt.Errorf(
+			"invalid %s %q in rocket.yaml: use only letters, digits, '.', '-' and an optional ':port'",
+			kind,
+			value,
+		)
+	}
+	return nil
+}
+
+// EnvVersionKey returns the compose interpolation variable carrying a service's
+// version, e.g. "my-api" -> "MY_API_VERSION". Anything that is not a letter or
+// digit becomes an underscore because compose variables must be shell
+// identifiers - "MY-API_VERSION" silently renders an invalid image reference.
+func EnvVersionKey(service string) string {
+	safe := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			return r
+		default:
+			return '_'
+		}
+	}, service)
+	return strings.ToUpper(safe) + "_VERSION"
 }
 
 // IsMonorepo returns true if this is a monorepo configuration
@@ -156,7 +243,7 @@ func (c *Config) Save(path string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	if err := os.WriteFile(path, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write rocket.yaml: %w", err)
 	}
 
