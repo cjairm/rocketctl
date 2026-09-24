@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
@@ -178,4 +179,11 @@ func LoadEnvFile(path string) (map[string]string, error) {
 	}
 
 	return envVars, nil
+}
+
+// MatchesAnyCurrent reports whether image is one of the current images.
+// build produces two tags per service - a bare one and a registry-prefixed
+// one - and both have to survive a prune.
+func MatchesAnyCurrent(image string, current []string) bool {
+	return slices.Contains(current, image)
 }

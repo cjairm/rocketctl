@@ -46,11 +46,20 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		currentVersions[service] = ver
 	}
 
-	// List all images for this project
-	pattern := fmt.Sprintf("%s_*", cfg.Project)
-	images, err := docker.ListImages(pattern)
-	if err != nil {
-		return err
+	// build tags every image twice, bare and registry-prefixed, so both
+	// patterns have to be listed or half the images are never pruned.
+	patterns := []string{
+		fmt.Sprintf("%s_*", cfg.Project),
+		fmt.Sprintf("%s/%s_*", cfg.Registry, cfg.Project),
+	}
+
+	var images []string
+	for _, pattern := range patterns {
+		found, err := docker.ListImages(pattern)
+		if err != nil {
+			return err
+		}
+		images = append(images, found...)
 	}
 
 	if len(images) == 0 {
@@ -58,19 +67,19 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Filter out images that match current versions
+	// Every tag that must survive: both forms, for every service.
+	var keep []string
+	for service, ver := range currentVersions {
+		imageName := cfg.GetImageName(service)
+		keep = append(keep,
+			fmt.Sprintf("%s:%s", imageName, ver),
+			fmt.Sprintf("%s/%s:%s", cfg.Registry, imageName, ver),
+		)
+	}
+
 	var imagesToRemove []string
 	for _, image := range images {
-		shouldRemove := true
-		for service, ver := range currentVersions {
-			imageName := cfg.GetImageName(service)
-			currentImage := fmt.Sprintf("%s:%s", imageName, ver)
-			if image == currentImage {
-				shouldRemove = false
-				break
-			}
-		}
-		if shouldRemove {
+		if !docker.MatchesAnyCurrent(image, keep) {
 			imagesToRemove = append(imagesToRemove, image)
 		}
 	}
