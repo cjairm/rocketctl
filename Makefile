@@ -3,8 +3,12 @@
 # Binary name
 BINARY_NAME=rocketctl
 
-# Version - can be overridden: make release VERSION=1.0.1
-VERSION?=1.0.0
+# Version - derived from the git tag so it cannot drift from what ships.
+# Override for a one-off build: make release VERSION=1.0.1
+VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+
+# Injected into the binary so `rocketctl --version` is meaningful.
+LDFLAGS=-s -w -X github.com/cjairm/rocketctl/cmd.binaryVersion=$(VERSION)
 
 # Build directory
 BUILD_DIR=dist
@@ -18,7 +22,7 @@ PLATFORMS=darwin/amd64 darwin/arm64
 ## build: Build binary for current platform
 build:
 	@echo "Building $(BINARY_NAME)..."
-	@go build -o $(BINARY_NAME) .
+	@go build -ldflags="$(LDFLAGS)" -o $(BINARY_NAME) .
 	@echo "✓ Build complete: $(BINARY_NAME)"
 
 ## clean: Remove build artifacts
@@ -37,11 +41,11 @@ release: clean
 	
 	# Build for Intel Macs (amd64)
 	@echo "Building for macOS Intel (amd64)..."
-	@GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 .
+	@GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 .
 	
 	# Build for Apple Silicon (arm64)
 	@echo "Building for macOS Apple Silicon (arm64)..."
-	@GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 .
+	@GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 .
 	
 	# Generate checksums
 	@echo "Generating checksums..."

@@ -30,11 +30,22 @@ jobs:
 
       - name: Build binaries
         run: |
+          LDFLAGS="-s -w -X github.com/cjairm/rocketctl/cmd.binaryVersion=v${{ steps.get_version.outputs.VERSION }}"
+
           # Build for Intel Macs (amd64)
-          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o rocketctl-darwin-amd64 .
+          GOOS=darwin GOARCH=amd64 go build -ldflags="$LDFLAGS" -o rocketctl-darwin-amd64 .
 
           # Build for Apple Silicon (arm64)
-          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o rocketctl-darwin-arm64 .
+          GOOS=darwin GOARCH=arm64 go build -ldflags="$LDFLAGS" -o rocketctl-darwin-arm64 .
+
+      - name: Verify the built binary reports the tag
+        run: |
+          ACTUAL=$(./rocketctl-darwin-arm64 --version || ./rocketctl-darwin-amd64 --version)
+          echo "Built: $ACTUAL"
+          case "$ACTUAL" in
+            *"v${{ steps.get_version.outputs.VERSION }}"*) echo "✓ version matches tag" ;;
+            *) echo "✗ version does not match tag"; exit 1 ;;
+          esac
 
       - name: Generate checksums
         run: |
