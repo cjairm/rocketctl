@@ -7,7 +7,7 @@ import (
 	"github.com/cjairm/rocketctl/internal/config"
 )
 
-func TestMigrateService(t *testing.T) {
+func TestRunningService(t *testing.T) {
 	single := &config.Config{Project: "myapp", Service: "api"}
 	mono := &config.Config{Project: "myapp", Services: []string{"api", "web"}}
 	tests := []struct {
@@ -19,7 +19,7 @@ func TestMigrateService(t *testing.T) {
 	}{
 		{"single-service infers the service", single, nil, "api", ""},
 		{"single-service accepts its own name", single, []string{"api"}, "api", ""},
-		// Migrating is too consequential to ignore a name that does not match.
+		// Acting on a running service is too consequential to ignore a name that does not match.
 		{
 			"single-service rejects another name",
 			single,
@@ -39,18 +39,18 @@ func TestMigrateService(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := migrateService(tt.cfg, tt.args)
+			got, err := runningService(tt.cfg, tt.args)
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("migrateService() error = %v, want it to contain %q", err, tt.wantErr)
+					t.Fatalf("runningService() error = %v, want it to contain %q", err, tt.wantErr)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("migrateService() error = %v", err)
+				t.Fatalf("runningService() error = %v", err)
 			}
 			if got != tt.want {
-				t.Errorf("migrateService() = %q, want %q", got, tt.want)
+				t.Errorf("runningService() = %q, want %q", got, tt.want)
 			}
 		})
 	}

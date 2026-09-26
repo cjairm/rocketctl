@@ -7,7 +7,6 @@ import (
 	"errors"
 	"os"
 
-	"github.com/cjairm/rocketctl/internal/migrate"
 	"github.com/spf13/cobra"
 )
 
@@ -59,9 +58,10 @@ func exitCode(err error) int {
 	if err == nil {
 		return 0
 	}
-	var appErr *migrate.ExitError
+	// An app command's failure (migrate, backup) carries its own status.
+	var appErr interface{ ExitCode() int }
 	if errors.As(err, &appErr) {
-		return appErr.Code
+		return appErr.ExitCode()
 	}
 	return 1
 }

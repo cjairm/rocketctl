@@ -6,14 +6,16 @@ Reference detail for RocketCTL. The short version an agent needs up front lives 
 
 ```
 main.go              cmd.Execute()
-cmd/                 15 Cobra commands, one file each (~1,300 LOC)
+cmd/                 16 Cobra commands, one file each (~1,300 LOC)
 internal/config/     rocket.yaml parsing, validation, all path/name derivation
 internal/version/    .rocket-version read/write, semver bump
 internal/docker/     subprocess wrapper around the docker CLI
 internal/compose/    subprocess wrapper around docker compose v2, plus PinImages (compose YAML tag rewrite)
 internal/registry/   AWS ECR login + repository creation
 internal/ssh/        golang.org/x/crypto/ssh client for remote deploy
+internal/container/  finds a service's running container and runs an app-declared command in it
 internal/migrate/    runs the image's rocketctl.migrate label command in its running container
+internal/backup/     runs the image's rocketctl.backup label command and saves its stdout locally
 internal/templates/  go:embed templates rendered by `init`
 install.sh           end-user installer (curl | bash)
 uninstall.sh         end-user uninstaller
@@ -23,8 +25,9 @@ specs/v1_0_0.md      original specification
 ```
 
 Dependency direction is one-way: `cmd/` → `internal/*`. No `internal` package imports another
-except through `config`, and `migrate` → `ssh` for `ShellQuote` alone (one quoting function, not
-two). There is no shared state between commands.
+except through `config`, `container` → `ssh` for `ShellQuote` alone (one quoting function, not
+two), and `migrate`/`backup` → `container`, which holds what the two share: the running-container
+lookup, the `docker exec` command line and the exit-status hint. There is no shared state between commands.
 
 ## Command shape
 
@@ -35,8 +38,9 @@ Every command follows the same sequence:
 3. `cfg.ValidateService(service)`.
 4. Derive paths through `Config` methods.
 5. Shell out via `internal/docker`, `internal/compose`, or `internal/ssh`.
-6. Return the error; `Execute` maps it to exit code 1 — except a `*migrate.ExitError`, whose code
-   is the app's own and is passed through.
+6. Return the error; `Execute` maps it to exit code 1 — except an app command's failure
+   (`*migrate.ExitError`, `*backup.ExitError`, anything with `ExitCode() int`), whose code is the
+   app's own and is passed through.
 
 `ecr` is the only command with a subcommand (`ecr create`).
 

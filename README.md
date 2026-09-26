@@ -199,6 +199,7 @@ Every command has a description and examples in `rocketctl <command> --help`.
 | `rocketctl deploy --clean`                               | Deploy, then free space (see below)     |
 | `rocketctl migrate [service]`                            | Dry-run the app's migrations on server  |
 | `rocketctl migrate [service] --apply [--yes]`            | Apply the app's migrations on server    |
+| `rocketctl backup [service] [--keep N] [--out DIR]`      | Save the app's own backup locally       |
 | `rocketctl ps`                                           | List running containers                 |
 | `rocketctl logs [service] [-f] [--prod]`                 | Show service logs                       |
 | `rocketctl exec [service] [cmd]`                         | Execute command in container            |
@@ -236,6 +237,12 @@ rocketctl build api --bump minor --push # Build, version and push
 rocketctl deploy                        # Deploy to remote server
 rocketctl migrate api            # Preview the release's migrations (dry run)
 rocketctl migrate api --apply    # Apply them, after confirmation
+```
+
+**Backup:**
+
+```bash
+rocketctl backup api             # Save a backup to ~/.rocketctl/backups/<project>/
 ```
 
 ## Deployment
@@ -541,6 +548,66 @@ An app that wants migrations provides **one** command that:
 3. Is idempotent: running `--apply` twice is safe, and the second run changes nothing.
 4. With `--dry-run`, changes nothing and prints what `--apply` would do.
 5. Exits non-zero on the first failure and stops.
+
+## Backups
+
+`rocketctl backup` saves a backup the app takes of itself, from its running container to a file on
+your machine. Like migrations: **the app declares, rocketctl runs.**
+
+### Declaring the command
+
+The app's production image declares one backup command, and optionally the saved file's extension:
+
+```dockerfile
+LABEL rocketctl.backup="sh bin/backup.sh"
+LABEL rocketctl.backup.suffix=".tar.gz"
+```
+
+An image without `rocketctl.backup` has nothing to back up: `rocketctl backup` says so and exits 0.
+Without `rocketctl.backup.suffix` the file ends in `.backup`. The suffix must be a plain extension
+(a dot, then letters and digits, e.g. `.tar.gz`, at most 16 characters); anything else is refused
+before the command runs.
+
+### Running it
+
+```bash
+rocketctl backup api                  # save to ~/.rocketctl/backups/<project>/
+rocketctl backup api --keep 10        # keep the newest 10 instead of 5
+rocketctl backup api --out /mnt/safe  # save in another folder
+```
+
+Single-service projects can leave out the service name. Over SSH to the `ip` in `rocket.yaml`,
+rocketctl:
+
+1. Finds the service's **running** container, with the same lookup and refusals as `migrate`.
+2. Reads `rocketctl.backup` and `rocketctl.backup.suffix` from that container's image.
+3. Runs the command in that container with `docker exec … sh -c`, exactly as declared.
+4. Streams its **stdout** straight into `<project>-<service>-<timestamp><suffix>.partial` on your
+   machine, reporting progress every 10 MB. Nothing is written on the server. Its **stderr** is
+   shown live and saved to `.rocket-logs/backup-<service>-<timestamp>.log`.
+5. On exit 0 with a non-empty file, renames it to `<project>-<service>-<timestamp><suffix>` and
+   prints the host, container, image tag, path, size and sha256 (also recorded in the log).
+6. Then deletes that service's backups beyond the newest `--keep` (default 5). Only files named
+   exactly like its own backups, with the current suffix, are ever touched.
+
+Backups hold real data, so they live outside any repository, in folders only you can open (700)
+and files only you can read (600). A non-zero exit or an empty backup is reported as a failure,
+the partial file is deleted, and nothing is pruned; a non-zero exit is passed through as
+rocketctl's own. A `.partial` file left in the folder is from a run that was interrupted
+(Ctrl-C, dropped connection) and is never a usable backup.
+
+### Contract for apps
+
+An app that wants backups provides **one** command that:
+
+1. Writes one complete backup to **stdout**, and nothing else: every message goes to stderr.
+2. Exits non-zero on any failure. For a pipeline (`dump | compress`) that means the exit status
+   must reflect every step, not just the last one — otherwise a failed first step still exits 0
+   and the "backup" is a valid but empty archive.
+3. Only reads. It never changes the app's data.
+4. Reads its own connection settings from its container's environment. It takes no arguments.
+
+Restoring is up to the app: rocketctl only takes and keeps the file.
 
 ### Follow-up: scheduled jobs
 

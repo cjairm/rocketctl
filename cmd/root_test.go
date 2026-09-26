@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/cjairm/rocketctl/internal/backup"
 	"github.com/cjairm/rocketctl/internal/migrate"
 )
 
@@ -19,6 +20,11 @@ func TestExitCode(t *testing.T) {
 		{"ordinary error", errors.New("boom"), 1},
 		{"app exit code is passed through", appFailure, 3},
 		{"wrapped app exit code is passed through", fmt.Errorf("migrate: %w", appFailure), 3},
+		{
+			"backup exit code is passed through",
+			&backup.ExitError{Code: 4, Command: "sh bin/backup.sh", LogPath: "x.log"},
+			4,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

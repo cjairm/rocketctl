@@ -11,9 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// migrateLogDir holds one log per migrate run. rocketctl keeps no other logs,
-// so it sits next to rocket.yaml, named like .rocket-version.
-const migrateLogDir = ".rocket-logs"
+// appLogDir holds one log per migrate or backup run. rocketctl keeps no
+// other logs, so it sits next to rocket.yaml, named like .rocket-version.
+const appLogDir = ".rocket-logs"
 
 var (
 	migrateApply bool
@@ -28,7 +28,7 @@ var migrateCmd = &cobra.Command{
 
 Dry run by default: the command gets --dry-run. Pass --apply to make changes;
 it asks for confirmation first unless --yes is given. An image without the
-label has nothing to migrate. Output is streamed and saved to ` + migrateLogDir + `/.`,
+label has nothing to migrate. Output is streamed and saved to ` + appLogDir + `/.`,
 	Example: `  rocketctl migrate api                 # dry run
   rocketctl migrate api --apply         # apply, after confirmation
   rocketctl migrate api --apply --yes   # apply without asking (CI)
@@ -54,7 +54,7 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	service, err := migrateService(cfg, args)
+	service, err := runningService(cfg, args)
 	if err != nil {
 		return err
 	}
@@ -84,7 +84,7 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 		Service: service,
 		Apply:   migrateApply,
 		Yes:     migrateYes,
-		LogDir:  migrateLogDir,
+		LogDir:  appLogDir,
 		In:      os.Stdin,
 		Out:     os.Stdout,
 		ErrOut:  os.Stderr,
@@ -92,10 +92,11 @@ func runMigrate(cmd *cobra.Command, args []string) error {
 	})
 }
 
-// migrateService resolves which service to migrate. Unlike build and push, a
-// name given in single-service mode is checked rather than ignored: running
-// migrations for a service other than the one typed must not happen quietly.
-func migrateService(cfg *config.Config, args []string) (string, error) {
+// runningService resolves which service's running container a command acts
+// on. Unlike build and push, a name given in single-service mode is checked
+// rather than ignored: acting on a service other than the one typed must not
+// happen quietly.
+func runningService(cfg *config.Config, args []string) (string, error) {
 	var service string
 	switch {
 	case len(args) > 0:
