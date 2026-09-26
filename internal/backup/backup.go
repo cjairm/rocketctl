@@ -1,6 +1,7 @@
-// Package backup saves an app's own backup, taken inside its running
-// container, to a local file. The app declares the command with a Docker
-// label; rocketctl knows nothing else about it.
+// Package backup saves an app's own backup to a local file. The app declares
+// the command with a Docker label; rocketctl runs it on this machine in a
+// throwaway container of the app's image, with the settings from a local env
+// file, and knows nothing else about it. Nothing runs on the server.
 package backup
 
 import (
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	"github.com/cjairm/rocketctl/internal/container"
+	"github.com/cjairm/rocketctl/internal/ssh"
 )
 
 const (
@@ -49,7 +51,8 @@ const DefaultProgressEvery = 10 << 20
 
 // Options describes one backup invocation.
 type Options struct {
-	Host    string // shown in the report, e.g. "deploy@10.0.0.5"
+	Image   string // the local image to run the backup command in
+	EnvFile string // the settings the command runs with; never read here
 	Project string
 	Service string
 	Dir     string // where backups are saved
@@ -81,8 +84,9 @@ func (e *ExitError) Error() string {
 // ExitCode is the app's own exit status.
 func (e *ExitError) ExitCode() int { return e.Code }
 
-// Run finds the service's running container, reads the backup command from
-// its image, runs it there and saves its stdout to a file in opts.Dir.
+// Run reads the backup command from the local image, runs it in a throwaway
+// container of that image with opts.EnvFile's settings, and saves its stdout
+// to a file in opts.Dir.
 func Run(r container.Runner, opts Options) error {
 	if opts.Keep < 1 {
 		return fmt.Errorf(
@@ -91,21 +95,28 @@ func Run(r container.Runner, opts Options) error {
 		)
 	}
 
-	t, err := container.Find(r, opts.Host, opts.Project, opts.Service)
+	labels, err := container.ImageLabels(r, opts.Image)
 	if err != nil {
-		return err
+		return fmt.Errorf(
+			"%w. The backup runs in the service's image on this machine: run 'rocketctl build %s' first",
+			err,
+			opts.Service,
+		)
 	}
-	command := strings.TrimSpace(t.Labels[Label])
+	command := strings.TrimSpace(labels[Label])
 	if command == "" {
 		_, _ = fmt.Fprintf(
 			opts.Out,
-			"✅ %s (%s) has no %s label: nothing to back up\n",
-			t.Name, t.ImageRef, Label,
+			"✅ %s has no %s label: nothing to back up\n",
+			opts.Image, Label,
 		)
 		return nil
 	}
-	suffix, err := suffixOf(t)
+	suffix, err := suffixOf(opts.Image, labels)
 	if err != nil {
+		return err
+	}
+	if err := checkEnvFile(r, opts.EnvFile); err != nil {
 		return err
 	}
 
@@ -139,19 +150,18 @@ func Run(r container.Runner, opts Options) error {
 	defer func() { _ = logFile.Close() }()
 	_, _ = fmt.Fprintf(
 		logFile,
-		"# %s\n# host:      %s\n# container: %s\n# image:     %s\n# command:   %s\n# file:      %s\n\n",
+		"# %s\n# image:    %s\n# settings: %s\n# command:  %s\n# file:     %s\n\n",
 		opts.Now().Format(time.RFC3339),
-		opts.Host,
-		t.Name,
-		t.ImageRef,
+		opts.Image,
+		opts.EnvFile,
 		command,
 		path,
 	)
 
-	_, _ = fmt.Fprintf(opts.Out, "💾 Backing up %s on %s\n", opts.Service, opts.Host)
-	_, _ = fmt.Fprintf(opts.Out, "   Container: %s\n", t.Name)
-	_, _ = fmt.Fprintf(opts.Out, "   Image:     %s\n", t.ImageRef)
-	_, _ = fmt.Fprintf(opts.Out, "   Command:   %s\n", command)
+	_, _ = fmt.Fprintf(opts.Out, "💾 Backing up %s on this machine\n", opts.Service)
+	_, _ = fmt.Fprintf(opts.Out, "   Image:    %s\n", opts.Image)
+	_, _ = fmt.Fprintf(opts.Out, "   Settings: %s\n", opts.EnvFile)
+	_, _ = fmt.Fprintf(opts.Out, "   Command:  %s\n", command)
 	_, _ = fmt.Fprintf(opts.Out, "📝 Logging to %s\n", logPath)
 
 	// stdout is the backup and goes to the file alone, hashed and counted on
@@ -162,7 +172,7 @@ func Run(r container.Runner, opts Options) error {
 		every = DefaultProgressEvery
 	}
 	code, err := r.ExecStream(
-		container.Exec(t.Name, command),
+		runCommand(opts.Image, opts.EnvFile, command),
 		io.MultiWriter(file, hash, &progress{out: opts.Out, every: every}),
 		io.MultiWriter(opts.ErrOut, logFile),
 	)
@@ -170,7 +180,7 @@ func Run(r container.Runner, opts Options) error {
 		_, _ = fmt.Fprintf(logFile, "\n# could not run the command: %v\n", err)
 		return fmt.Errorf(
 			"backup failed: could not run it in %s (log: %s). Nothing was saved: %w",
-			t.Name,
+			opts.Image,
 			logPath,
 			err,
 		)
@@ -204,7 +214,7 @@ func Run(r container.Runner, opts Options) error {
 	saved = true
 	sum := "sha256 " + hex.EncodeToString(hash.Sum(nil))
 	_, _ = fmt.Fprintf(logFile, "# saved %d bytes, %s\n", info.Size(), sum)
-	_, _ = fmt.Fprintf(opts.Out, "✓ Backup saved: %s (%s)\n", path, humanSize(info.Size()))
+	_, _ = fmt.Fprintf(opts.Out, "✓ Backup saved: %s (%s)\n", path, HumanSize(info.Size()))
 	_, _ = fmt.Fprintf(opts.Out, "   %s\n", sum)
 
 	return prune(opts, prefix, suffix)
@@ -212,21 +222,94 @@ func Run(r container.Runner, opts Options) error {
 
 // suffixOf returns the image's backup suffix, or DefaultSuffix when it sets
 // none. It refuses anything but a plain extension.
-func suffixOf(t *container.Target) (string, error) {
-	suffix := strings.TrimSpace(t.Labels[SuffixLabel])
+func suffixOf(image string, labels map[string]string) (string, error) {
+	suffix := strings.TrimSpace(labels[SuffixLabel])
 	if suffix == "" {
 		return DefaultSuffix, nil
 	}
 	if len(suffix) > maxSuffixLen || !validSuffix.MatchString(suffix) {
 		return "", fmt.Errorf(
 			"image %s sets %s=%q: it must be a plain file extension like .tar.gz (a dot, then letters and digits, at most %d characters). Fix the label in the app's Dockerfile",
-			t.ImageRef,
+			image,
 			SuffixLabel,
 			suffix,
 			maxSuffixLen,
 		)
 	}
 	return suffix, nil
+}
+
+// Newest returns the path of the service's most recent finished backup in dir,
+// whatever its suffix, or "" when there is none.
+func Newest(dir, project, service string) (string, error) {
+	pattern := regexp.MustCompile(
+		"^" + regexp.QuoteMeta(fmt.Sprintf("%s-%s-", project, service)) +
+			`\d{8}-\d{6}(\.[A-Za-z0-9]+)+$`,
+	)
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to list backups in %s: %w", dir, err)
+	}
+	newest := ""
+	for _, e := range entries {
+		name := e.Name()
+		if !e.Type().IsRegular() || strings.HasSuffix(name, partialExt) ||
+			!pattern.MatchString(name) {
+			continue
+		}
+		// Same prefix, so the timestamp decides the name order.
+		if name > newest {
+			newest = name
+		}
+	}
+	if newest == "" {
+		return "", nil
+	}
+	return filepath.Join(dir, newest), nil
+}
+
+// checkEnvFile refuses settings that could leak: a file others can read, or
+// one committed to git. rocketctl only ever passes its path to docker.
+func checkEnvFile(r container.Runner, path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf(
+			"settings file %s not found: create it with the settings the backup command needs, then chmod 600 %s",
+			path,
+			path,
+		)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf(
+			"settings file %s can be read by others (mode %o): run 'chmod 600 %s'",
+			path, info.Mode().Perm(), path,
+		)
+	}
+	code, err := r.ExecStream(
+		"git ls-files --error-unmatch -- "+ssh.ShellQuote(path),
+		io.Discard,
+		io.Discard,
+	)
+	if err == nil && code == 0 {
+		return fmt.Errorf(
+			"settings file %s is tracked by git: run 'git rm --cached %s' and add it to .gitignore",
+			path, path,
+		)
+	}
+	return nil
+}
+
+// runCommand is the local command that runs the backup in a throwaway
+// container of image. --pull never: the image is the one built here, never a
+// registry's. The settings go by file path, so no value is ever an argument.
+func runCommand(image, envFile, command string) string {
+	return fmt.Sprintf(
+		"docker run --rm --pull never --env-file %s %s sh -c %s",
+		ssh.ShellQuote(envFile), ssh.ShellQuote(image), ssh.ShellQuote(command),
+	)
 }
 
 // prune deletes this service's backups beyond the newest opts.Keep. It only
@@ -300,14 +383,14 @@ func (p *progress) Write(b []byte) (int, error) {
 	}
 	p.total += int64(len(b))
 	if p.total >= p.next {
-		_, _ = fmt.Fprintf(p.out, "   … %s received\n", humanSize(p.total))
+		_, _ = fmt.Fprintf(p.out, "   … %s received\n", HumanSize(p.total))
 		p.next = (p.total/p.every + 1) * p.every
 	}
 	return len(b), nil
 }
 
-// humanSize formats a byte count for people, e.g. "15 B" or "3.2 MB".
-func humanSize(n int64) string {
+// HumanSize formats a byte count for people, e.g. "15 B" or "3.2 MB".
+func HumanSize(n int64) string {
 	const unit = 1024
 	if n < unit {
 		return fmt.Sprintf("%d B", n)

@@ -157,6 +157,13 @@ func EnvVersionKey(service string) string {
 	return strings.ToUpper(safe) + "_VERSION"
 }
 
+// ComposeServiceName is a service's name in the compose files, dev and
+// production alike, e.g. "myapp-api". The generated docker-compose.prod.yml
+// uses it, and every command that looks a service up there expects it.
+func ComposeServiceName(project, service string) string {
+	return fmt.Sprintf("%s-%s", project, service)
+}
+
 // IsMonorepo returns true if this is a monorepo configuration
 func (c *Config) IsMonorepo() bool {
 	return len(c.Services) > 0
@@ -203,6 +210,16 @@ func (c *Config) GetVersionFilePath(service string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(serviceDir, ".rocket-version"), nil
+}
+
+// GetBackupEnvPath returns the path to the .env.backup file holding the
+// settings `rocketctl backup` runs the app's backup command with
+func (c *Config) GetBackupEnvPath(service string) (string, error) {
+	serviceDir, err := c.GetServiceDirectory(service)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(serviceDir, ".env.backup"), nil
 }
 
 // GetImageName returns the full image name (without registry) for a service

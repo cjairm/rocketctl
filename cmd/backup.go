@@ -8,21 +8,26 @@ import (
 
 	"github.com/cjairm/rocketctl/internal/backup"
 	"github.com/cjairm/rocketctl/internal/config"
-	"github.com/cjairm/rocketctl/internal/ssh"
+	"github.com/cjairm/rocketctl/internal/container"
+	"github.com/cjairm/rocketctl/internal/version"
 	"github.com/spf13/cobra"
 )
 
 var (
-	backupOut  string
-	backupKeep int
+	backupOut     string
+	backupKeep    int
+	backupEnvFile string
 )
 
 var backupCmd = &cobra.Command{
 	Use:   "backup [service]",
 	Short: "Save the app's own backup from its running container",
 	Long: `Runs the backup command the app declares with the image label
-` + backup.Label + `, inside the service's running container on the server, and
-streams its stdout straight into a local file. Nothing is written on the server.
+` + backup.Label + ` on this machine, in a throwaway container of the service's
+image at its .rocket-version (built by 'rocketctl build'), with the settings in
+<service dir>/.env.backup. Nothing runs on the server: the app's data store
+must accept connections from this machine. The settings file must be readable
+by you alone (chmod 600) and not tracked by git; rocketctl never reads it.
 
 The file is saved as <project>-<service>-<timestamp><suffix>, with the suffix
 from the ` + backup.SuffixLabel + ` label (default ` + backup.DefaultSuffix + `), under
@@ -33,6 +38,7 @@ The command's messages are shown live and saved to ` + appLogDir + `/.`,
 	Example: `  rocketctl backup api                 # save a backup of api
   rocketctl backup api --keep 10       # keep the newest 10
   rocketctl backup api --out /mnt/safe # save somewhere else
+  rocketctl backup api --env-file ~/secrets/api.env
   rocketctl backup                     # single-service repo`,
 	Args: cobra.MaximumNArgs(1),
 	// A failed backup is not a usage mistake; don't bury its output.
@@ -46,6 +52,8 @@ func init() {
 		StringVar(&backupOut, "out", "", "Folder to save the backup in (default ~/.rocketctl/backups/<project>)")
 	backupCmd.Flags().
 		IntVar(&backupKeep, "keep", 5, "How many backups of the service to keep, including this one")
+	backupCmd.Flags().
+		StringVar(&backupEnvFile, "env-file", "", "Settings to run the backup with (default <service dir>/.env.backup)")
 }
 
 func runBackup(cmd *cobra.Command, args []string) error {
@@ -60,7 +68,7 @@ func runBackup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Refuse before connecting, so a typo costs nothing.
+	// Refuse before doing anything, so a typo costs nothing.
 	if backupKeep < 1 {
 		return fmt.Errorf("--keep must be at least 1, got %d", backupKeep)
 	}
@@ -69,32 +77,31 @@ func runBackup(cmd *cobra.Command, args []string) error {
 	if err != nil && backupOut == "" {
 		return fmt.Errorf("cannot find your home directory: %w. Pass --out <dir>", err)
 	}
-	dir := backupDir(home, cfg.Project, backupOut)
 
-	if cfg.IP == "" {
-		return fmt.Errorf(
-			"server IP is required to take a backup. Please run 'rocketctl init' to configure it",
-		)
+	envFile := backupEnvFile
+	if envFile == "" {
+		if envFile, err = cfg.GetBackupEnvPath(service); err != nil {
+			return err
+		}
 	}
 
-	sshUser, err := resolveSSHUser(cfg)
+	// The image the service's .rocket-version names, as 'rocketctl build'
+	// tagged it on this machine.
+	versionFile, err := cfg.GetVersionFilePath(service)
 	if err != nil {
 		return err
 	}
-	host := fmt.Sprintf("%s@%s", sshUser, cfg.IP)
-
-	fmt.Printf("📡 Connecting to %s...\n", host)
-	client, err := ssh.Connect(cfg.IP, sshUser, cfg.SSHKeyPath, cfg.InsecureSkipHostKeyCheck)
+	currentVersion, err := version.Get(versionFile)
 	if err != nil {
-		return fmt.Errorf("failed to connect to server: %w", err)
+		return err
 	}
-	defer func() { _ = client.Close() }()
 
-	return backup.Run(client, backup.Options{
-		Host:    host,
+	return backup.Run(container.Local{}, backup.Options{
+		Image:   cfg.GetFullImageName(service, currentVersion),
+		EnvFile: envFile,
 		Project: cfg.Project,
 		Service: service,
-		Dir:     dir,
+		Dir:     backupDir(home, cfg.Project, backupOut),
 		Keep:    backupKeep,
 		LogDir:  appLogDir,
 		Out:     os.Stdout,

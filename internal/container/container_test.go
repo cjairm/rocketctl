@@ -177,3 +177,56 @@ func TestQueryKeepsStderrOutOfTheResult(t *testing.T) {
 type runnerFunc func(string, io.Writer, io.Writer) (int, error)
 
 func (f runnerFunc) ExecStream(c string, o, e io.Writer) (int, error) { return f(c, o, e) }
+
+func TestInspectReadsTheImageAndItsLabels(t *testing.T) {
+	host := &fakeHost{labels: `{"rocketctl.x":"run me"}`}
+
+	got, err := Inspect(host, "myapp-api-1")
+	if err != nil {
+		t.Fatalf("Inspect() error = %v", err)
+	}
+	if got.Name != "myapp-api-1" || got.ImageRef != "reg.example.com/myapp_api:1.4.2" {
+		t.Errorf("Inspect() = %+v, want container myapp-api-1 on reg.example.com/myapp_api:1.4.2", got)
+	}
+	if got.Labels["rocketctl.x"] != "run me" {
+		t.Errorf("Labels = %v, want rocketctl.x=run me", got.Labels)
+	}
+}
+
+func TestImageLabels(t *testing.T) {
+	host := &fakeHost{labels: "null"}
+
+	got, err := ImageLabels(host, "reg.example.com/myapp_api:1.4.2")
+	if err != nil {
+		t.Fatalf("ImageLabels() error = %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("ImageLabels() = %v, want an empty, non-nil set", got)
+	}
+	want := "docker image inspect --format '{{json .Config.Labels}}' 'reg.example.com/myapp_api:1.4.2'"
+	if !slices.Equal(host.commands, []string{want}) {
+		t.Errorf("commands = %q, want %q", host.commands, want)
+	}
+}
+
+func TestLocalRunsOnThisMachine(t *testing.T) {
+	var out, errOut strings.Builder
+	code, err := Local{}.ExecStream("printf out; printf err >&2; exit 3", &out, &errOut)
+	if err != nil {
+		t.Fatalf("ExecStream() error = %v", err)
+	}
+	if code != 3 || out.String() != "out" || errOut.String() != "err" {
+		t.Errorf("ExecStream() = %d, %q, %q; want 3, out, err", code, out.String(), errOut.String())
+	}
+}
+
+func TestLocalFeedsStdin(t *testing.T) {
+	var out strings.Builder
+	code, err := Local{}.ExecStreamIn("cat", strings.NewReader("backup\x00bytes"), &out, io.Discard)
+	if err != nil || code != 0 {
+		t.Fatalf("ExecStreamIn() = %d, %v", code, err)
+	}
+	if out.String() != "backup\x00bytes" {
+		t.Errorf("stdout = %q, want stdin passed through unchanged", out.String())
+	}
+}

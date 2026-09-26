@@ -115,8 +115,8 @@ func Run(r Runner, opts Options) error {
 	// stdout and stderr are copied on separate goroutines and both land in
 	// the log, so the two tees share one lock.
 	var mu sync.Mutex
-	stdout := &lockedWriter{mu: &mu, w: io.MultiWriter(opts.Out, logFile)}
-	stderr := &lockedWriter{mu: &mu, w: io.MultiWriter(opts.ErrOut, logFile)}
+	stdout := &container.LockedWriter{Mu: &mu, W: io.MultiWriter(opts.Out, logFile)}
+	stderr := &container.LockedWriter{Mu: &mu, W: io.MultiWriter(opts.ErrOut, logFile)}
 
 	code, err := r.ExecStream(container.Exec(t.Name, command), stdout, stderr)
 	if err != nil {
@@ -152,16 +152,4 @@ func createLog(opts Options) (string, *os.File, error) {
 		return "", nil, fmt.Errorf("failed to create log %s: %w", path, err)
 	}
 	return path, f, nil
-}
-
-// lockedWriter serialises writes that share a destination.
-type lockedWriter struct {
-	mu *sync.Mutex
-	w  io.Writer
-}
-
-func (l *lockedWriter) Write(p []byte) (int, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.w.Write(p)
 }

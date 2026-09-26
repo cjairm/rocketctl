@@ -7,6 +7,7 @@ import (
 
 	"github.com/cjairm/rocketctl/internal/backup"
 	"github.com/cjairm/rocketctl/internal/migrate"
+	"github.com/cjairm/rocketctl/internal/restore"
 )
 
 func TestExitCode(t *testing.T) {
@@ -24,6 +25,11 @@ func TestExitCode(t *testing.T) {
 			"backup exit code is passed through",
 			&backup.ExitError{Code: 4, Command: "sh bin/backup.sh", LogPath: "x.log"},
 			4,
+		},
+		{
+			"restore exit code is passed through",
+			&restore.ExitError{Code: 5, Command: "sh bin/restore.sh", LogPath: "x.log"},
+			5,
 		},
 	}
 	for _, tt := range tests {

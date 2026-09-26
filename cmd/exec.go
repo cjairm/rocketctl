@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/cjairm/rocketctl/internal/compose"
 	"github.com/cjairm/rocketctl/internal/config"
 	"github.com/spf13/cobra"
@@ -40,7 +38,7 @@ func runExec(cmd *cobra.Command, args []string) error {
 	}
 
 	// Compose container name format: <project>-<service>
-	containerName := fmt.Sprintf("%s-%s", cfg.Project, serviceName)
+	containerName := config.ComposeServiceName(cfg.Project, serviceName)
 	command := args[1:]
 
 	return compose.Exec(containerName, command)

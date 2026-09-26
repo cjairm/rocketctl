@@ -157,6 +157,21 @@ func TestPathDerivation(t *testing.T) {
 			want: "Dockerfile",
 		},
 		{
+			name: "single service backup env file sits at the root",
+			got:  func() (string, error) { return singleService().GetBackupEnvPath("backend") },
+			want: ".env.backup",
+		},
+		{
+			name: "monorepo backup env file sits under the service",
+			got:  func() (string, error) { return monorepo().GetBackupEnvPath("api") },
+			want: "api/.env.backup",
+		},
+		{
+			name:    "backup env file of an unknown service is rejected",
+			got:     func() (string, error) { return monorepo().GetBackupEnvPath("nope") },
+			wantErr: true,
+		},
+		{
 			name: "monorepo production dockerfile",
 			got:  func() (string, error) { return monorepo().GetDockerfilePath("api", true) },
 			want: "api/Dockerfile.production",
@@ -345,5 +360,11 @@ func TestValidateRejectsUnsafeNames(t *testing.T) {
 				t.Errorf("expected no error, got %v", err)
 			}
 		})
+	}
+}
+
+func TestComposeServiceName(t *testing.T) {
+	if got := ComposeServiceName("myapp", "api"); got != "myapp-api" {
+		t.Errorf("ComposeServiceName() = %q, want %q", got, "myapp-api")
 	}
 }

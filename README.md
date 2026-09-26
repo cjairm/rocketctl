@@ -199,7 +199,8 @@ Every command has a description and examples in `rocketctl <command> --help`.
 | `rocketctl deploy --clean`                               | Deploy, then free space (see below)     |
 | `rocketctl migrate [service]`                            | Dry-run the app's migrations on server  |
 | `rocketctl migrate [service] --apply [--yes]`            | Apply the app's migrations on server    |
-| `rocketctl backup [service] [--keep N] [--out DIR]`      | Save the app's own backup locally       |
+| `rocketctl backup [service] [--keep N] [--out DIR]`      | Back up the app's data to this machine  |
+| `rocketctl restore [service] [file] [--yes]`             | Load a backup into the local dev stack  |
 | `rocketctl ps`                                           | List running containers                 |
 | `rocketctl logs [service] [-f] [--prod]`                 | Show service logs                       |
 | `rocketctl exec [service] [cmd]`                         | Execute command in container            |
@@ -243,6 +244,7 @@ rocketctl migrate api --apply    # Apply them, after confirmation
 
 ```bash
 rocketctl backup api             # Save a backup to ~/.rocketctl/backups/<project>/
+rocketctl restore api            # Load the newest one into the local dev stack
 ```
 
 ## Deployment
@@ -551,63 +553,104 @@ An app that wants migrations provides **one** command that:
 
 ## Backups
 
-`rocketctl backup` saves a backup the app takes of itself, from its running container to a file on
-your machine. Like migrations: **the app declares, rocketctl runs.**
+`rocketctl backup` saves a backup of the app's data to your machine, and `rocketctl restore` loads
+one into your local dev stack. Like migrations: **the app declares, rocketctl runs.** Nothing runs
+on the server: the backup runs on this machine, so the server does none of the work.
 
-### Declaring the command
+### Declaring the commands
 
-The app's production image declares one backup command, and optionally the saved file's extension:
+The app's production image declares its backup command, and optionally the saved file's
+extension. Its **dev** image (`Dockerfile`) declares the restore command, because that is the
+image the dev container runs:
 
 ```dockerfile
+# Dockerfile.production
 LABEL rocketctl.backup="sh bin/backup.sh"
 LABEL rocketctl.backup.suffix=".tar.gz"
+
+# Dockerfile
+LABEL rocketctl.restore="sh bin/restore.sh"
 ```
 
-An image without `rocketctl.backup` has nothing to back up: `rocketctl backup` says so and exits 0.
+An image without the label has nothing to back up or restore: the command says so and exits 0.
 Without `rocketctl.backup.suffix` the file ends in `.backup`. The suffix must be a plain extension
 (a dot, then letters and digits, e.g. `.tar.gz`, at most 16 characters); anything else is refused
 before the command runs.
 
-### Running it
+### Backing up
 
 ```bash
 rocketctl backup api                  # save to ~/.rocketctl/backups/<project>/
 rocketctl backup api --keep 10        # keep the newest 10 instead of 5
 rocketctl backup api --out /mnt/safe  # save in another folder
+rocketctl backup api --env-file ~/secrets/api.env
 ```
 
-Single-service projects can leave out the service name. Over SSH to the `ip` in `rocket.yaml`,
-rocketctl:
+The backup command connects to the **real** data store, so it needs its settings. Put them in
+`<service dir>/.env.backup` (or pass `--env-file`), separate from `.env` so your dev stack never
+points at production:
 
-1. Finds the service's **running** container, with the same lookup and refusals as `migrate`.
-2. Reads `rocketctl.backup` and `rocketctl.backup.suffix` from that container's image.
-3. Runs the command in that container with `docker exec … sh -c`, exactly as declared.
-4. Streams its **stdout** straight into `<project>-<service>-<timestamp><suffix>.partial` on your
-   machine, reporting progress every 10 MB. Nothing is written on the server. Its **stderr** is
-   shown live and saved to `.rocket-logs/backup-<service>-<timestamp>.log`.
-5. On exit 0 with a non-empty file, renames it to `<project>-<service>-<timestamp><suffix>` and
-   prints the host, container, image tag, path, size and sha256 (also recorded in the log).
-6. Then deletes that service's backups beyond the newest `--keep` (default 5). Only files named
+```bash
+chmod 600 api/.env.backup
+echo ".env.backup" >> .gitignore
+```
+
+rocketctl refuses a settings file that others can read or that git tracks, and never reads it
+itself: docker gets its path, so no value appears in output, logs or process arguments. The data
+store must accept connections from this machine.
+
+Single-service projects can leave out the service name. rocketctl:
+
+1. Reads `rocketctl.backup` and `rocketctl.backup.suffix` from the service's image at its current
+   `.rocket-version`, as `rocketctl build` tagged it on this machine. It never pulls.
+2. Runs the command in a throwaway container of that image:
+   `docker run --rm --pull never --env-file <settings> <image> sh -c <command>`.
+3. Streams its **stdout** into `<project>-<service>-<timestamp><suffix>.partial`, reporting
+   progress every 10 MB. Its **stderr** is shown live and saved to
+   `.rocket-logs/backup-<service>-<timestamp>.log`.
+4. On exit 0 with a non-empty file, renames it to `<project>-<service>-<timestamp><suffix>` and
+   prints the image, path, size and sha256 (also recorded in the log).
+5. Then deletes that service's backups beyond the newest `--keep` (default 5). Only files named
    exactly like its own backups, with the current suffix, are ever touched.
 
 Backups hold real data, so they live outside any repository, in folders only you can open (700)
 and files only you can read (600). A non-zero exit or an empty backup is reported as a failure,
 the partial file is deleted, and nothing is pruned; a non-zero exit is passed through as
-rocketctl's own. A `.partial` file left in the folder is from a run that was interrupted
-(Ctrl-C, dropped connection) and is never a usable backup.
+rocketctl's own. A `.partial` file left in the folder is from a run that was interrupted and is
+never a usable backup.
+
+### Restoring
+
+```bash
+rocketctl restore api                 # the newest backup of api
+rocketctl restore api <file>          # a specific backup
+rocketctl restore api --yes           # no prompt
+```
+
+`restore` only ever touches the **local dev stack** started by `rocketctl up`, never the server.
+It finds the service's running container with
+`docker compose -f docker-compose.yml ps <project>-<service>` (the same name every command uses), shows the container, file, size and date,
+asks `(y/n)` unless `--yes`, then runs `docker exec -i <container> sh -c <command>` with the
+backup on stdin. Output is streamed and saved to `.rocket-logs/restore-<service>-<timestamp>.log`,
+and a non-zero exit is passed through.
 
 ### Contract for apps
 
-An app that wants backups provides **one** command that:
+The backup command:
 
 1. Writes one complete backup to **stdout**, and nothing else: every message goes to stderr.
 2. Exits non-zero on any failure. For a pipeline (`dump | compress`) that means the exit status
-   must reflect every step, not just the last one — otherwise a failed first step still exits 0
+   must reflect every step, not just the last one - otherwise a failed first step still exits 0
    and the "backup" is a valid but empty archive.
 3. Only reads. It never changes the app's data.
-4. Reads its own connection settings from its container's environment. It takes no arguments.
+4. Works in a fresh container using only the environment it is given. It takes no arguments.
 
-Restoring is up to the app: rocketctl only takes and keeps the file.
+The restore command:
+
+1. Reads one backup from **stdin** and replaces the app's **local** data with it.
+2. Refuses to run if its settings point anywhere but a local data store. rocketctl cannot check
+   this: it is the app's own guard against restoring into production.
+3. Exits non-zero on failure.
 
 ### Follow-up: scheduled jobs
 

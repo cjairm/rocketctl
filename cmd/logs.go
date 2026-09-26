@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"fmt"
-
 	"github.com/cjairm/rocketctl/internal/compose"
 	"github.com/cjairm/rocketctl/internal/config"
 	"github.com/spf13/cobra"
@@ -53,7 +51,7 @@ func runLogs(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		// Compose service name format: <project>-<service>
-		service = fmt.Sprintf("%s-%s", cfg.Project, serviceName)
+		service = config.ComposeServiceName(cfg.Project, serviceName)
 	}
 
 	return compose.Logs(composeFile, service, followFlag)
