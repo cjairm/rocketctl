@@ -10,19 +10,22 @@ import (
 )
 
 var (
-	bumpType string
+	bumpType  string
+	buildPush bool
 )
 
 var buildCmd = &cobra.Command{
 	Use:   "build [service]",
 	Short: "Build a production Docker image",
-	Long:  `Builds a production Docker image for a service, bumps the version, and updates .rocket-version.`,
-	RunE:  runBuild,
+	Long: `Builds a production Docker image for a service, bumps the version, and updates .rocket-version.
+With --push, also pushes the new image to the registry. Deploy stays a separate step.`,
+	RunE: runBuild,
 }
 
 func init() {
 	rootCmd.AddCommand(buildCmd)
 	buildCmd.Flags().StringVar(&bumpType, "bump", "patch", "Version bump type (major, minor, patch)")
+	buildCmd.Flags().BoolVar(&buildPush, "push", false, "Push the image to the registry after building")
 }
 
 func runBuild(cmd *cobra.Command, args []string) error {
@@ -81,7 +84,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 	// Build the image with both local and registry tags
 	imageName := cfg.GetImageName(service)
-	registryImageName := fmt.Sprintf("%s/%s", cfg.Registry, imageName)
+	registryImageName := cfg.GetImageRepository(service)
 
 	buildOpts := docker.BuildOptions{
 		ImageName:  imageName,
@@ -107,5 +110,18 @@ func runBuild(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("✓ Successfully built and tagged %s:%s\n", registryImageName, newVersion)
 	fmt.Printf("✓ Updated version to %s\n", newVersion)
+
+	// After the version bump: a failed push leaves a finished build that
+	// 'rocketctl push' can retry without rebuilding.
+	if buildPush {
+		if err := pushImage(cfg, service, newVersion); err != nil {
+			return fmt.Errorf(
+				"built %s but push failed; retry with 'rocketctl push %s': %w",
+				cfg.GetFullImageName(service, newVersion),
+				service,
+				err,
+			)
+		}
+	}
 	return nil
 }

@@ -197,7 +197,11 @@ func (c *Client) UploadFileMode(localPath, remotePath string, mode os.FileMode) 
 	// Wrapped rather than a bare `defer local.Close()` so errcheck sees a
 	// deliberate discard.
 	defer func() { _ = local.Close() }()
+	return c.UploadContent(local, remotePath, mode)
+}
 
+// UploadContent writes content to remotePath with the given permission bits.
+func (c *Client) UploadContent(content io.Reader, remotePath string, mode os.FileMode) error {
 	// Create remote directory if needed
 	remoteDir := filepath.Dir(remotePath)
 	if err := c.MkdirAll(remoteDir); err != nil {
@@ -224,7 +228,7 @@ func (c *Client) UploadFileMode(localPath, remotePath string, mode os.FileMode) 
 	if err := session.Start(cmd); err != nil {
 		return fmt.Errorf("failed to start upload command: %w", err)
 	}
-	if _, err := io.Copy(stdin, local); err != nil {
+	if _, err := io.Copy(stdin, content); err != nil {
 		return fmt.Errorf("failed to write file content: %w", err)
 	}
 	// Explicit discard, not a bare stdin.Close(): the remote command's real

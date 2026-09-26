@@ -113,7 +113,7 @@ func runUp(cmd *cobra.Command, args []string) error {
 
 		// Tag the image to match docker-compose.prod.yml expectations
 		// Compose expects: {registry}/{project}_{service}:{version}
-		registryImage := fmt.Sprintf("%s/%s", cfg.Registry, imageName)
+		registryImage := cfg.GetImageRepository(service)
 		if err := docker.Tag(imageName, currentVersion, registryImage, currentVersion); err != nil {
 			return err
 		}

@@ -55,17 +55,22 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	return pushImage(cfg, service, currentVersion)
+}
+
+// pushImage authenticates with ECR and pushes a service's built image.
+// Shared by push and build --push.
+func pushImage(cfg *config.Config, service, ver string) error {
 	// Authenticate with ECR
 	if err := registry.LoginECR(cfg.Registry, cfg.Region); err != nil {
 		return err
 	}
 
 	// Push the image
-	fullImageName := cfg.GetFullImageName(service, currentVersion)
-	if err := docker.Push(fmt.Sprintf("%s/%s", cfg.Registry, cfg.GetImageName(service)), currentVersion); err != nil {
+	if err := docker.Push(cfg.GetImageRepository(service), ver); err != nil {
 		return err
 	}
 
-	fmt.Printf("✓ Successfully pushed %s\n", fullImageName)
+	fmt.Printf("✓ Successfully pushed %s\n", cfg.GetFullImageName(service, ver))
 	return nil
 }

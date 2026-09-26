@@ -9,7 +9,7 @@ Cobra commands in `cmd/`, logic in `internal/`. Deeper detail: `docs/architectur
   global config, no persistent root flags, no context passing. Keep it that way.
 - **Never build paths or image names by hand.** Use the `Config` methods:
   `GetServiceDirectory`, `GetVersionFilePath`, `GetDockerfilePath`, `EnvVersionKey`,
-  `GetImageName`, `GetFullImageName`. The `<project>_<service>:<version>` scheme is not configurable.
+  `GetImageName`, `GetImageRepository`, `GetFullImageName`. The `<project>_<service>:<version>` scheme is not configurable.
 - **Handle both repo modes.** `cfg.IsMonorepo()` decides: monorepo requires an explicit service arg
   and resolves to `./<service>/`; single-service infers from `cfg.Service` and resolves to `.`.
   Always `cfg.ValidateService(service)` before using a user-supplied name.

@@ -10,7 +10,7 @@ cmd/                 15 Cobra commands, one file each (~1,300 LOC)
 internal/config/     rocket.yaml parsing, validation, all path/name derivation
 internal/version/    .rocket-version read/write, semver bump
 internal/docker/     subprocess wrapper around the docker CLI
-internal/compose/    subprocess wrapper around docker compose v2
+internal/compose/    subprocess wrapper around docker compose v2, plus PinImages (compose YAML tag rewrite)
 internal/registry/   AWS ECR login + repository creation
 internal/ssh/        golang.org/x/crypto/ssh client for remote deploy
 internal/migrate/    runs the image's rocketctl.migrate label command in its running container
@@ -55,6 +55,7 @@ Derived values. Note `filepath.Join` **cleans** its result, so a monorepo servic
 | `GetVersionFilePath`      | `.rocket-version`                          | `<service>/.rocket-version`         |
 | `GetDockerfilePath(prod)` | `Dockerfile[.production]`                  | `<service>/Dockerfile[.production]` |
 | `GetImageName`            | `<project>_<service>`                      | same                                |
+| `GetImageRepository`      | `<registry>/<project>_<service>`           | same                                |
 | `GetFullImageName`        | `<registry>/<project>_<service>:<version>` | same                                |
 
 ## Versioning
@@ -67,12 +68,17 @@ Derived values. Note `filepath.Join` **cleans** its result, so a monorepo servic
 
 `rocketctl deploy` is remote-first:
 
-1. Connect over SSH (custom key → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`; passphrases unsupported).
-2. `mkdir -p ~/apps/<project>` on the server.
-3. Upload `docker-compose.prod.yml` as `docker-compose.yml`.
-4. Upload `caddy/Caddyfile` if `domain` is set and the file exists.
-5. Upload `.env.example` → `.env` per service, only when `.env` is absent on the server.
-6. Run ECR login, then `docker compose pull` and `docker compose up -d` remotely with each
+1. Read `docker-compose.prod.yml` and run `compose.PinImages`: every service whose image
+   repository is a built one (`GetImageRepository`) gets that service's version. Matching is by
+   image, not service name, so services reusing a built image follow it. A built image no service
+   uses is flagged "not pinned" (anchors and merge keys are not followed). Runs before connecting,
+   so a bad file fails with nothing done on the server. The local file is not modified.
+2. Connect over SSH (custom key → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`; passphrases unsupported).
+3. `mkdir -p ~/apps/<project>` on the server.
+4. Upload the pinned copy as `docker-compose.yml`.
+5. Upload `caddy/Caddyfile` if `domain` is set and the file exists.
+6. Upload `.env.example` → `.env` per service, only when `.env` is absent on the server.
+7. Run ECR login, then `docker compose pull` and `docker compose up -d` remotely with each
    service's `<SERVICE>_VERSION` set from its local `.rocket-version`, so the server runs the
    version that was built rather than falling back to `:latest`.
 

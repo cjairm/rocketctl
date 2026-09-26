@@ -73,7 +73,7 @@ func runPrune(cmd *cobra.Command, args []string) error {
 		imageName := cfg.GetImageName(service)
 		keep = append(keep,
 			fmt.Sprintf("%s:%s", imageName, ver),
-			fmt.Sprintf("%s/%s:%s", cfg.Registry, imageName, ver),
+			cfg.GetFullImageName(service, ver),
 		)
 	}
 

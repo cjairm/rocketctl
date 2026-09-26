@@ -91,9 +91,8 @@ Create `.env.example` (per service in a monorepo) with the variables your servic
 ```bash
 rocketctl ecr create             # Create ECR repos (once)
 rocketctl up --prod              # Test production build locally (E2E)
-rocketctl build api --bump patch # Build and bump version
-rocketctl push api               # Push to registry
-rocketctl deploy                 # Deploy (on production server)
+rocketctl build api --bump patch --push # Build, bump version, push to registry
+rocketctl deploy                        # Deploy (on production server)
 ```
 
 ## Configuration
@@ -188,6 +187,7 @@ project/
 | -------------------------------------------------------- | --------------------------------------- |
 | `rocketctl init`                                         | Initialize project                      |
 | `rocketctl build [service] --bump [patch\|minor\|major]` | Build production image and bump version |
+| `rocketctl build [service] --push`                       | Build, then push the image to registry  |
 | `rocketctl push [service]`                               | Push image to registry                  |
 | `rocketctl up [service] [--build] [--no-cache]`          | Start dev environment                   |
 | `rocketctl up --prod [service]`                          | Test production build locally (E2E)     |
@@ -229,9 +229,8 @@ rocketctl down --prod         # Stop production stack
 
 ```bash
 rocketctl up --prod              # Test locally (E2E)
-rocketctl build api --bump minor # Build and version
-rocketctl push api               # Push to registry
-rocketctl deploy                 # Deploy to remote server
+rocketctl build api --bump minor --push # Build, version and push
+rocketctl deploy                        # Deploy to remote server
 rocketctl migrate api            # Preview the release's migrations (dry run)
 rocketctl migrate api --apply    # Apply them, after confirmation
 ```
@@ -242,15 +241,27 @@ rocketctl migrate api --apply    # Apply them, after confirmation
 
 The `rocketctl deploy` command automates deployment to a remote server via SSH. It:
 
-1. Connects to your server via SSH
-2. Creates directory structure: `~/apps/<PROJECT-NAME>/`
-3. Uploads necessary files:
-   - `docker-compose.yml` (generated from template)
+1. Pins every built image in `docker-compose.prod.yml` to its `.rocket-version` (a bad file fails here, before connecting)
+2. Connects to your server via SSH
+3. Creates directory structure: `~/apps/<PROJECT-NAME>/`
+4. Uploads necessary files:
+   - `docker-compose.yml` (the pinned copy of your `docker-compose.prod.yml`)
    - `Caddyfile` (if domain is configured)
    - `.env` (if it doesn't exist on the server)
-4. Authenticates with ECR
-5. Pulls latest Docker images
-6. Restarts services with zero-downtime
+5. Authenticates with ECR
+6. Pulls latest Docker images
+7. Restarts services with zero-downtime
+
+Deploy sets the tag of every compose service by image, not by name: any service whose `image:` is a repository rocketctl builds gets that service's current version, whatever tag the file has. Services that reuse a built image (e.g. a worker or scheduler running the API image with another command) are deployed with the same tag automatically. Other images (e.g. `caddy:2-alpine`) are left as written. Only the uploaded copy is changed, never your local file, and deploy prints what it pinned:
+
+```
+🏷  Pinning image tags:
+   myapp_api:1.4.0 → myapp-api, myapp-scheduler
+```
+
+A built image that no compose service uses is flagged `⚠️  not pinned`. Services whose `image:` comes from a YAML anchor or merge key (`<<: *base`) are not followed; write `image:` on the service itself.
+
+Because the tag comes from `.rocket-version`, editing the tag in `docker-compose.prod.yml` no longer deploys an older version. To roll back, set `.rocket-version` to the older version and run `rocketctl deploy`, then set it back to the newest built version before the next `build`. Otherwise the next build reuses a version that already exists in ECR and overwrites that image.
 
 ### Prerequisites
 

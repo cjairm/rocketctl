@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/user"
@@ -8,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cjairm/rocketctl/internal/compose"
 	"github.com/cjairm/rocketctl/internal/config"
 	"github.com/cjairm/rocketctl/internal/ssh"
 	"github.com/cjairm/rocketctl/internal/version"
@@ -75,6 +77,45 @@ func collectServiceVersions(cfg *config.Config) (map[string]string, error) {
 	return versions, nil
 }
 
+// builtImageTags maps the image repository rocketctl builds for each service
+// to the version being deployed, e.g. "reg/myapp_api" -> "1.4.0".
+func builtImageTags(cfg *config.Config, serviceVersions map[string]string) map[string]string {
+	tags := make(map[string]string, len(serviceVersions))
+	for service, ver := range serviceVersions {
+		tags[cfg.GetImageRepository(service)] = ver
+	}
+	return tags
+}
+
+// pinnedImageLines renders which compose services took each built image's
+// tag, in rocket.yaml order, e.g. "myapp_api:1.4.0 → myapp-api, myapp-worker".
+// A built image no service took is flagged rather than skipped, so a service
+// the pinning could not reach is visible.
+func pinnedImageLines(
+	cfg *config.Config,
+	serviceVersions map[string]string,
+	updated map[string][]string,
+) []string {
+	var lines []string
+	for _, service := range cfg.GetServices() {
+		repository := cfg.GetImageRepository(service)
+		target := strings.Join(updated[repository], ", ")
+		if target == "" {
+			target = fmt.Sprintf(
+				"⚠️  not pinned: no service in docker-compose.prod.yml uses %s (YAML anchors and merge keys are not followed)",
+				repository,
+			)
+		}
+		lines = append(lines, fmt.Sprintf(
+			"%s:%s → %s",
+			cfg.GetImageName(service),
+			serviceVersions[service],
+			target,
+		))
+	}
+	return lines
+}
+
 // resolveSSHUser returns ssh_user from rocket.yaml, falling back to the local
 // user the way ssh itself does.
 func resolveSSHUser(cfg *config.Config) (string, error) {
@@ -108,6 +149,38 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		fmt.Printf("   %s %s\n", service, serviceVersions[service])
 	}
 
+	// Pin the compose file before connecting, so a bad file fails without
+	// touching the server. Every service reusing a built image gets its tag.
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+	localComposePath := filepath.Join(cwd, "docker-compose.prod.yml")
+	composeInfo, err := os.Stat(localComposePath)
+	if os.IsNotExist(err) {
+		return fmt.Errorf(
+			"docker-compose.prod.yml not found in project directory. Please create it first using 'rocketctl init'",
+		)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to stat docker-compose.prod.yml: %w", err)
+	}
+	composeContent, err := os.ReadFile(localComposePath)
+	if err != nil {
+		return fmt.Errorf("failed to read docker-compose.prod.yml: %w", err)
+	}
+	pinnedCompose, updated, err := compose.PinImages(
+		composeContent,
+		builtImageTags(cfg, serviceVersions),
+	)
+	if err != nil {
+		return err
+	}
+	fmt.Println("🏷  Pinning image tags:")
+	for _, line := range pinnedImageLines(cfg, serviceVersions, updated) {
+		fmt.Printf("   %s\n", line)
+	}
+
 	sshUser, err := resolveSSHUser(cfg)
 	if err != nil {
 		return err
@@ -122,12 +195,6 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 	defer func() { _ = client.Close() }()
 
-	// Get current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get current directory: %w", err)
-	}
-
 	// Create remote directory structure
 	// The "~" stays outside the quotes so the remote shell still expands it.
 	remoteDir := "~/apps/" + ssh.ShellQuote(cfg.Project)
@@ -139,16 +206,14 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Upload docker-compose.prod.yml from project directory
-	localComposePath := filepath.Join(cwd, "docker-compose.prod.yml")
-	if _, err := os.Stat(localComposePath); os.IsNotExist(err) {
-		return fmt.Errorf(
-			"docker-compose.prod.yml not found in project directory. Please create it first using 'rocketctl init'",
-		)
-	}
+	// Upload the pinned docker-compose.prod.yml; the local file is untouched
 	fmt.Println("📤 Uploading docker-compose.prod.yml...")
 	remoteComposePath := fmt.Sprintf("%s/docker-compose.yml", remoteDir)
-	if err := client.UploadFile(localComposePath, remoteComposePath); err != nil {
+	if err := client.UploadContent(
+		bytes.NewReader(pinnedCompose),
+		remoteComposePath,
+		composeInfo.Mode().Perm(),
+	); err != nil {
 		return fmt.Errorf("failed to upload docker-compose.prod.yml: %w", err)
 	}
 

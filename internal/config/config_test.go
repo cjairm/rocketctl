@@ -189,6 +189,10 @@ func TestImageNaming(t *testing.T) {
 		t.Errorf("GetImageName = %q, want %q", got, "myapp_api")
 	}
 
+	if got := cfg.GetImageRepository("api"); got != "reg.example.com/myapp_api" {
+		t.Errorf("GetImageRepository = %q, want %q", got, "reg.example.com/myapp_api")
+	}
+
 	want := "reg.example.com/myapp_api:1.2.3"
 	if got := cfg.GetFullImageName("api", "1.2.3"); got != want {
 		t.Errorf("GetFullImageName = %q, want %q", got, want)

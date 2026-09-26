@@ -1,6 +1,11 @@
 package cmd
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+
+	"github.com/cjairm/rocketctl/internal/config"
+)
 
 func TestVersionEnvAssignments(t *testing.T) {
 	tests := []struct {
@@ -35,5 +40,34 @@ func TestVersionEnvAssignments(t *testing.T) {
 				t.Errorf("versionEnvAssignments() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPinnedImageLines(t *testing.T) {
+	cfg := &config.Config{
+		Project:  "myapp",
+		Registry: "reg.example.com",
+		Services: []string{"api", "web"},
+	}
+	versions := map[string]string{"api": "1.4.0", "web": "2.0.1"}
+
+	tags := builtImageTags(cfg, versions)
+	wantTags := map[string]string{
+		"reg.example.com/myapp_api": "1.4.0",
+		"reg.example.com/myapp_web": "2.0.1",
+	}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("builtImageTags() = %v, want %v", tags, wantTags)
+	}
+
+	updated := map[string][]string{
+		"reg.example.com/myapp_api": {"myapp-api", "myapp-worker"},
+	}
+	want := []string{
+		"myapp_api:1.4.0 → myapp-api, myapp-worker",
+		"myapp_web:2.0.1 → ⚠️  not pinned: no service in docker-compose.prod.yml uses reg.example.com/myapp_web (YAML anchors and merge keys are not followed)",
+	}
+	if got := pinnedImageLines(cfg, versions, updated); !reflect.DeepEqual(got, want) {
+		t.Errorf("pinnedImageLines() = %q, want %q", got, want)
 	}
 }

@@ -211,10 +211,16 @@ func (c *Config) GetImageName(service string) string {
 	return fmt.Sprintf("%s_%s", c.Project, service)
 }
 
+// GetImageRepository returns the image name including registry, without a tag
+// Format: <registry>/<project>_<service>
+func (c *Config) GetImageRepository(service string) string {
+	return fmt.Sprintf("%s/%s", c.Registry, c.GetImageName(service))
+}
+
 // GetFullImageName returns the full image name including registry and version
 // Format: <registry>/<project>_<service>:<version>
 func (c *Config) GetFullImageName(service, version string) string {
-	return fmt.Sprintf("%s/%s:%s", c.Registry, c.GetImageName(service), version)
+	return fmt.Sprintf("%s:%s", c.GetImageRepository(service), version)
 }
 
 // GetDockerfilePath returns the path to a Dockerfile for a service
