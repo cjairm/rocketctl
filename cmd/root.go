@@ -4,8 +4,10 @@ Copyright © 2026 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"errors"
 	"os"
 
+	"github.com/cjairm/rocketctl/internal/migrate"
 	"github.com/spf13/cobra"
 )
 
@@ -31,10 +33,23 @@ structure conventions. Supports both monorepo and single-service repositories.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
+	if code := exitCode(rootCmd.Execute()); code != 0 {
+		os.Exit(code)
 	}
+}
+
+// exitCode maps a command's error to the process exit status: 1 for
+// rocketctl's own failures, or the app's own status when a command it ran
+// in a container failed, so scripts can tell the two apart.
+func exitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var appErr *migrate.ExitError
+	if errors.As(err, &appErr) {
+		return appErr.Code
+	}
+	return 1
 }
 
 func init() {

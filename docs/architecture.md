@@ -6,13 +6,14 @@ Reference detail for RocketCTL. The short version an agent needs up front lives 
 
 ```
 main.go              cmd.Execute()
-cmd/                 14 Cobra commands, one file each (~1,200 LOC)
+cmd/                 15 Cobra commands, one file each (~1,300 LOC)
 internal/config/     rocket.yaml parsing, validation, all path/name derivation
 internal/version/    .rocket-version read/write, semver bump
 internal/docker/     subprocess wrapper around the docker CLI
 internal/compose/    subprocess wrapper around docker compose v2
 internal/registry/   AWS ECR login + repository creation
 internal/ssh/        golang.org/x/crypto/ssh client for remote deploy
+internal/migrate/    runs the image's rocketctl.migrate label command in its running container
 internal/templates/  go:embed templates rendered by `init`
 install.sh           end-user installer (curl | bash)
 uninstall.sh         end-user uninstaller
@@ -22,7 +23,8 @@ specs/v1_0_0.md      original specification
 ```
 
 Dependency direction is one-way: `cmd/` → `internal/*`. No `internal` package imports another
-except through `config`. There is no shared state between commands.
+except through `config`, and `migrate` → `ssh` for `ShellQuote` alone (one quoting function, not
+two). There is no shared state between commands.
 
 ## Command shape
 
@@ -33,7 +35,8 @@ Every command follows the same sequence:
 3. `cfg.ValidateService(service)`.
 4. Derive paths through `Config` methods.
 5. Shell out via `internal/docker`, `internal/compose`, or `internal/ssh`.
-6. Return the error; Cobra maps it to exit code 1.
+6. Return the error; `Execute` maps it to exit code 1 — except a `*migrate.ExitError`, whose code
+   is the app's own and is passed through.
 
 `ecr` is the only command with a subcommand (`ecr create`).
 

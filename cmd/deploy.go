@@ -75,6 +75,19 @@ func collectServiceVersions(cfg *config.Config) (map[string]string, error) {
 	return versions, nil
 }
 
+// resolveSSHUser returns ssh_user from rocket.yaml, falling back to the local
+// user the way ssh itself does.
+func resolveSSHUser(cfg *config.Config) (string, error) {
+	if cfg.SSHUser != "" {
+		return cfg.SSHUser, nil
+	}
+	currentUser, err := user.Current()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current user: %w", err)
+	}
+	return currentUser.Username, nil
+}
+
 func runDeploy(cmd *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -95,13 +108,9 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		fmt.Printf("   %s %s\n", service, serviceVersions[service])
 	}
 
-	sshUser := cfg.SSHUser
-	if sshUser == "" {
-		currentUser, err := user.Current()
-		if err != nil {
-			return fmt.Errorf("failed to get current user: %w", err)
-		}
-		sshUser = currentUser.Username
+	sshUser, err := resolveSSHUser(cfg)
+	if err != nil {
+		return err
 	}
 	fmt.Printf("🚀 Deploying to %s@%s...\n", sshUser, cfg.IP)
 

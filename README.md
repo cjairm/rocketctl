@@ -194,6 +194,8 @@ project/
 | `rocketctl down`                                         | Stop dev environment                    |
 | `rocketctl down --prod`                                  | Stop production/test environment        |
 | `rocketctl deploy`                                       | Deploy to production                    |
+| `rocketctl migrate [service]`                            | Dry-run the app's migrations on server  |
+| `rocketctl migrate [service] --apply [--yes]`            | Apply the app's migrations on server    |
 | `rocketctl ps`                                           | List running containers                 |
 | `rocketctl logs [service] [-f] [--prod]`                 | Show service logs                       |
 | `rocketctl exec [service] [cmd]`                         | Execute command in container            |
@@ -230,6 +232,8 @@ rocketctl up --prod              # Test locally (E2E)
 rocketctl build api --bump minor # Build and version
 rocketctl push api               # Push to registry
 rocketctl deploy                 # Deploy to remote server
+rocketctl migrate api            # Preview the release's migrations (dry run)
+rocketctl migrate api --apply    # Apply them, after confirmation
 ```
 
 ## Deployment
@@ -460,6 +464,65 @@ ssh user@server-ip 'netstat -tuln | grep LISTEN'
 
 # Update docker-compose.yml port mappings if needed
 ```
+
+## Migrations
+
+`rocketctl migrate` runs an app's release migrations (schema and data scripts) after a deploy.
+rocketctl knows nothing about the app: **the app declares, rocketctl runs.**
+
+### Declaring the command
+
+The app's production image declares one migration command with a label:
+
+```dockerfile
+LABEL rocketctl.migrate="python bin/migrate.py"
+```
+
+The label ships inside the image, so the migration code always matches the code that is deployed.
+An image without the label has nothing to migrate: `rocketctl migrate` says so and exits 0.
+
+### Running it
+
+```bash
+rocketctl migrate api             # dry run - always the default
+rocketctl migrate api --apply     # real run, asks for confirmation first
+rocketctl migrate api --apply -y  # real run, no prompt (CI)
+```
+
+Single-service projects can leave out the service name. Over SSH to the `ip` in `rocket.yaml`,
+rocketctl:
+
+1. Finds the service's **running** container (compose service `<project>-<service>`). It refuses if
+   none is running, or if more than one is (scaled services), and names them.
+2. Reads `rocketctl.migrate` from that container's image (`docker image inspect`).
+3. With `--apply`, shows host, container, image tag and command, and asks `(y/n)` unless `--yes`.
+4. Runs `<command> --dry-run` or `<command> --apply` in that container with `docker exec … sh -c`.
+   It always passes exactly one of the two. Without `--apply` it is always `--dry-run`.
+5. Streams stdout and stderr live, and saves them to `.rocket-logs/migrate-<service>-<timestamp>.log`
+   next to `rocket.yaml`. Add `.rocket-logs/` to your `.gitignore`.
+6. Exits with the command's own exit code. A non-zero exit is reported as a failed migration, along
+   with the path to the log.
+
+The image needs a `/bin/sh`. If the command is Python, set `PYTHONUNBUFFERED=1` in the image so
+output streams live instead of arriving in one block at the end.
+
+### Contract for apps
+
+An app that wants migrations provides **one** command that:
+
+1. Takes `--dry-run` or `--apply`, exactly one. Given neither, both, or anything else, it refuses
+   to run and exits non-zero.
+2. Runs every step itself, in order, with the rules in code. It reads no input files and takes no
+   other arguments.
+3. Is idempotent: running `--apply` twice is safe, and the second run changes nothing.
+4. With `--dry-run`, changes nothing and prints what `--apply` would do.
+5. Exits non-zero on the first failure and stops.
+
+### Follow-up: scheduled jobs
+
+Not built yet. Cron-style jobs can use the same pattern later: a `rocketctl.jobs` label listing
+`schedule command` pairs that rocketctl installs on the server, so schedules also ship with the
+image they run against.
 
 ## Releasing RocketCTL
 

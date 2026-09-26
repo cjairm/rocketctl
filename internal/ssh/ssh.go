@@ -156,6 +156,28 @@ func (c *Client) ExecInteractive(command string) error {
 	return nil
 }
 
+// ExecStream runs a command, streaming its stdout and stderr to the given
+// writers as it runs. A command that ran and exited non-zero is not an error:
+// its status is returned so the caller can pass it on. err is only for
+// failing to run the command at all.
+func (c *Client) ExecStream(command string, stdout, stderr io.Writer) (int, error) {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return -1, fmt.Errorf("failed to create session: %w", err)
+	}
+	defer func() { _ = session.Close() }()
+	session.Stdout = stdout
+	session.Stderr = stderr
+	if err := session.Run(command); err != nil {
+		var exitErr *ssh.ExitError
+		if errors.As(err, &exitErr) {
+			return exitErr.ExitStatus(), nil
+		}
+		return -1, fmt.Errorf("command failed: %w", err)
+	}
+	return 0, nil
+}
+
 // UploadFile uploads a local file to a remote path, preserving its mode.
 func (c *Client) UploadFile(localPath, remotePath string) error {
 	info, err := os.Stat(localPath)
