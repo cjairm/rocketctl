@@ -28,7 +28,8 @@ var deployCmd = &cobra.Command{
 It deploys each service's current .rocket-version, so build and push first.
 Every compose service whose image is one rocketctl builds is pinned to that
 version, matched by image rather than by name, so services that reuse a built
-image follow it. Only the uploaded copy is changed, never your local file.
+image follow it. Once the deploy succeeds, your local docker-compose.prod.yml
+gets the same tags (only the image values change), so commit it.
 
 Steps: pin and upload docker-compose.prod.yml as docker-compose.yml; upload
 caddy/Caddyfile when a domain is set; upload .env.example as .env only if the
@@ -237,6 +238,52 @@ func pinnedImageLines(
 	return lines
 }
 
+// saveDeployedCompose writes the tags just deployed back to the local
+// docker-compose.prod.yml, so the file says what the server runs. Only image
+// values differ from original, so comments and formatting survive. It refuses
+// when the file changed since deploy read it, and reports whether it wrote.
+func saveDeployedCompose(path string, original, pinned []byte) (bool, error) {
+	if bytes.Equal(original, pinned) {
+		return false, nil
+	}
+	current, err := os.ReadFile(path)
+	if err != nil {
+		return false, fmt.Errorf("failed to re-read %s: %w", path, err)
+	}
+	if !bytes.Equal(current, original) {
+		return false, fmt.Errorf(
+			"%s changed during the deploy, so the deployed tags were not written back. The server is updated; set the tags by hand",
+			path,
+		)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, fmt.Errorf("failed to stat %s: %w", path, err)
+	}
+	// Write a sibling and rename it over, so an interrupted write never
+	// leaves a half-written compose file.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".docker-compose.prod.yml-*")
+	if err != nil {
+		return false, fmt.Errorf("failed to update %s: %w", path, err)
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err := tmp.Write(pinned); err != nil {
+		_ = tmp.Close()
+		return false, fmt.Errorf("failed to update %s: %w", path, err)
+	}
+	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+		_ = tmp.Close()
+		return false, fmt.Errorf("failed to update %s: %w", path, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return false, fmt.Errorf("failed to update %s: %w", path, err)
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
+		return false, fmt.Errorf("failed to update %s: %w", path, err)
+	}
+	return true, nil
+}
+
 // resolveSSHUser returns ssh_user from rocket.yaml, falling back to the local
 // user the way ssh itself does.
 func resolveSSHUser(cfg *config.Config) (string, error) {
@@ -327,7 +374,8 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Upload the pinned docker-compose.prod.yml; the local file is untouched
+	// Upload the pinned docker-compose.prod.yml. The local file gets the same
+	// tags only after the deploy succeeds.
 	fmt.Println("📤 Uploading docker-compose.prod.yml...")
 	remoteComposePath := fmt.Sprintf("%s/docker-compose.yml", remoteDir)
 	if err := client.UploadContent(
@@ -479,6 +527,15 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("✅ Deployment successful!")
+
+	// Only now, with the server running these tags, record them locally.
+	saved, err := saveDeployedCompose(localComposePath, composeContent, pinnedCompose)
+	if err != nil {
+		return err
+	}
+	if saved {
+		fmt.Println("🏷  Updated docker-compose.prod.yml with the deployed tags: commit it")
+	}
 
 	if deployClean {
 		if err := cleanAfterDeploy(client, cfg, serviceVersions); err != nil {

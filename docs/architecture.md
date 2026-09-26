@@ -81,7 +81,8 @@ Derived values. Note `filepath.Join` **cleans** its result, so a monorepo servic
    repository is a built one (`GetImageRepository`) gets that service's version. Matching is by
    image, not service name, so services reusing a built image follow it. A built image no service
    uses is flagged "not pinned" (anchors and merge keys are not followed). Runs before connecting,
-   so a bad file fails with nothing done on the server. The local file is not modified.
+   so a bad file fails with nothing done on the server. The local file is rewritten with the same
+   tags only after step 7 succeeds (`saveDeployedCompose`), and only if unchanged since it was read.
 2. Connect over SSH (custom key → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`; passphrases unsupported).
 3. `mkdir -p ~/apps/<project>` on the server.
 4. Upload the pinned copy as `docker-compose.yml`.

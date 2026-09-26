@@ -1,8 +1,11 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/cjairm/rocketctl/internal/config"
 )
@@ -118,4 +121,59 @@ func TestStaleLocalImages(t *testing.T) {
 	if got := staleLocalImages(cfg, "api", "1.3.0", images); !reflect.DeepEqual(got, want) {
 		t.Errorf("staleLocalImages() = %v, want %v", got, want)
 	}
+}
+
+func TestSaveDeployedCompose(t *testing.T) {
+	const old = "services:\n  # keep me\n  myapp-api:\n    image: reg/myapp_api:1.3.0\n"
+	const pinned = "services:\n  # keep me\n  myapp-api:\n    image: reg/myapp_api:1.4.0\n"
+
+	t.Run("writes the deployed tags back", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "docker-compose.prod.yml")
+		if err := os.WriteFile(path, []byte(old), 0o640); err != nil {
+			t.Fatal(err)
+		}
+		changed, err := saveDeployedCompose(path, []byte(old), []byte(pinned))
+		if err != nil || !changed {
+			t.Fatalf("saveDeployedCompose() = %v, %v; want true, nil", changed, err)
+		}
+		got, _ := os.ReadFile(path)
+		if string(got) != pinned {
+			t.Errorf("file = %q, want %q", got, pinned)
+		}
+		if info, _ := os.Stat(path); info.Mode().Perm() != 0o640 {
+			t.Errorf("mode = %o, want the file's own 640 kept", info.Mode().Perm())
+		}
+	})
+
+	t.Run("leaves an up-to-date file alone", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "docker-compose.prod.yml")
+		if err := os.WriteFile(path, []byte(pinned), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		stamp := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(path, stamp, stamp); err != nil {
+			t.Fatal(err)
+		}
+		changed, err := saveDeployedCompose(path, []byte(pinned), []byte(pinned))
+		if err != nil || changed {
+			t.Fatalf("saveDeployedCompose() = %v, %v; want false, nil", changed, err)
+		}
+		if info, _ := os.Stat(path); !info.ModTime().Equal(stamp) {
+			t.Errorf("file was rewritten, want it untouched")
+		}
+	})
+
+	t.Run("refuses to overwrite a file edited during the deploy", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "docker-compose.prod.yml")
+		edited := old + "  # edited meanwhile\n"
+		if err := os.WriteFile(path, []byte(edited), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := saveDeployedCompose(path, []byte(old), []byte(pinned)); err == nil {
+			t.Fatal("saveDeployedCompose() error = nil, want a refusal")
+		}
+		if got, _ := os.ReadFile(path); string(got) != edited {
+			t.Errorf("file = %q, want the edit kept", got)
+		}
+	})
 }

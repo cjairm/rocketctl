@@ -264,7 +264,7 @@ The `rocketctl deploy` command automates deployment to a remote server via SSH. 
 6. Pulls latest Docker images
 7. Restarts services with zero-downtime
 
-Deploy sets the tag of every compose service by image, not by name: any service whose `image:` is a repository rocketctl builds gets that service's current version, whatever tag the file has. Services that reuse a built image (e.g. a worker or scheduler running the API image with another command) are deployed with the same tag automatically. Other images (e.g. `caddy:2-alpine`) are left as written. Only the uploaded copy is changed, never your local file, and deploy prints what it pinned:
+Deploy sets the tag of every compose service by image, not by name: any service whose `image:` is a repository rocketctl builds gets that service's current version, whatever tag the file has. Services that reuse a built image (e.g. a worker or scheduler running the API image with another command) are deployed with the same tag automatically. Other images (e.g. `caddy:2-alpine`) are left as written. Once the deploy succeeds, your local `docker-compose.prod.yml` gets the same tags (only the `image:` values change; comments and formatting stay), so commit it with `.rocket-version`. If the file changed while deploying, it is left alone and deploy says so. Deploy prints what it pinned:
 
 ```
 🏷  Pinning image tags:
