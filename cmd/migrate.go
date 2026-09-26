@@ -29,6 +29,10 @@ var migrateCmd = &cobra.Command{
 Dry run by default: the command gets --dry-run. Pass --apply to make changes;
 it asks for confirmation first unless --yes is given. An image without the
 label has nothing to migrate. Output is streamed and saved to ` + migrateLogDir + `/.`,
+	Example: `  rocketctl migrate api                 # dry run
+  rocketctl migrate api --apply         # apply, after confirmation
+  rocketctl migrate api --apply --yes   # apply without asking (CI)
+  rocketctl migrate                     # single-service repo`,
 	Args: cobra.MaximumNArgs(1),
 	// A failed migration is not a usage mistake; don't bury its output.
 	SilenceUsage: true,

@@ -11,7 +11,9 @@ import (
 var ecrCmd = &cobra.Command{
 	Use:   "ecr",
 	Short: "Manage AWS ECR resources",
-	Long:  `Commands for managing AWS Elastic Container Registry resources.`,
+	Long: `Commands for managing AWS Elastic Container Registry resources, using your
+local AWS CLI and the region in rocket.yaml.`,
+	Example: `  rocketctl ecr create`,
 }
 
 var ecrCreateCmd = &cobra.Command{
@@ -20,8 +22,11 @@ var ecrCreateCmd = &cobra.Command{
 	Long: `Creates an ECR repository for each service defined in rocket.yaml.
 
 Repository names follow the convention <project>_<service>, matching the
-image naming used by the build and push commands.`,
-	RunE: runEcrCreate,
+image naming used by the build and push commands. Repositories that already
+exist are skipped, so it is safe to run again after adding a service. New
+repositories use AES-256 encryption and mutable tags.`,
+	Example: `  rocketctl ecr create`,
+	RunE:    runEcrCreate,
 }
 
 func init() {

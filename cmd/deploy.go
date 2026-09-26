@@ -22,17 +22,30 @@ import (
 var deployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Deploy services to remote server via SSH",
-	Long: `Uploads project files (docker-compose.prod.yml, caddy/Caddyfile, .env.example) to the remote server,
-authenticates with ECR, pulls latest images, and restarts services.
+	Long: `Deploys to the server in rocket.yaml (ip, ssh_user, ssh_key_path) over SSH, into
+~/apps/<project>. There is no dry run and no rollback.
 
-The deploy command uses files from your project directory, not templates. Ensure your project has:
-- docker-compose.prod.yml (required)
-- caddy/Caddyfile (if using domain/reverse proxy)
-- .env.example (for initial .env creation on server)
+It deploys each service's current .rocket-version, so build and push first.
+Every compose service whose image is one rocketctl builds is pinned to that
+version, matched by image rather than by name, so services that reuse a built
+image follow it. Only the uploaded copy is changed, never your local file.
 
-With --clean, after a successful deploy it frees space: prunes Docker on the server, and
-deletes this project's images older than the previous version from ECR and locally. The
-current and previous versions are kept so you can roll back.`,
+Steps: pin and upload docker-compose.prod.yml as docker-compose.yml; upload
+caddy/Caddyfile when a domain is set; upload .env.example as .env only if the
+server has no .env yet (edit the real values on the server); log in to ECR on
+the server; docker compose pull; docker compose up -d.
+
+With --clean, once the deploy succeeds, it frees space:
+  server  docker container/image/volume/network/system prune (server-wide;
+          volume prune is skipped on Docker older than 23)
+  ECR     deletes this project's versions older than the previous one
+  local   removes the same old versions of this project's images
+The current and previous versions are always kept, so you can roll back.`,
+	Example: `  rocketctl build api --bump patch --push
+  rocketctl deploy
+
+  # Deploy, then free disk space on the server, in ECR and locally
+  rocketctl deploy --clean`,
 	RunE: runDeploy,
 }
 
@@ -44,7 +57,7 @@ func init() {
 		&deployClean,
 		"clean",
 		false,
-		"After a successful deploy, prune Docker on the server and delete images older than the previous version from ECR and locally",
+		"Free space after a successful deploy: prune the server, delete old versions from ECR and locally (keeps current and previous)",
 	)
 }
 

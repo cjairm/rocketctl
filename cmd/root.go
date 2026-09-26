@@ -24,7 +24,21 @@ var rootCmd = &cobra.Command{
 building, versioning, pushing, and deployment for any project.
 
 It works by reading a minimal rocket.yaml config file and following folder
-structure conventions. Supports both monorepo and single-service repositories.`,
+structure conventions. Supports both monorepo and single-service repositories.
+
+Images are named <project>_<service>:<version>; each service's version lives
+in its .rocket-version file. Run commands from the folder with rocket.yaml.`,
+	Example: `  # Set up a project once
+  rocketctl init
+  rocketctl ecr create
+
+  # Release: build a new version, push it, deploy it
+  rocketctl build api --bump minor --push
+  rocketctl deploy
+
+  # Local development
+  rocketctl up
+  rocketctl logs api -f`,
 	// Version adds --version. It does not shadow the `version` subcommand,
 	// which reports per-service versions from .rocket-version.
 	Version: binaryVersion,

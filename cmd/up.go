@@ -20,8 +20,21 @@ var (
 var upCmd = &cobra.Command{
 	Use:   "up [service]",
 	Short: "Start services with docker compose",
-	Long:  `Starts services using docker compose. Use --prod to build and run the production stack for E2E testing. Optionally specify a service to build only that service (with --prod), but the entire stack will still be started.`,
-	RunE:  runUp,
+	Long: `Starts containers on this machine with docker compose.
+
+Without --prod: runs docker-compose.yml (your dev file) in the foreground. The
+optional argument is a service name from that file, passed straight to compose.
+
+With --prod: builds each service's Dockerfile.production at its current
+.rocket-version (no version bump), then starts the whole docker-compose.prod.yml
+stack in the background, to test production locally. The optional argument is
+a rocket.yaml service: only that one is rebuilt, but the whole stack starts.`,
+	Example: `  rocketctl up                       # dev stack
+  rocketctl up --build               # rebuild dev images first
+  rocketctl up --build --no-cache
+  rocketctl up --prod                # build and run the production stack
+  rocketctl up --prod api            # rebuild only api, run everything`,
+	RunE: runUp,
 }
 
 func init() {

@@ -183,6 +183,8 @@ project/
 
 ## Commands
 
+Every command has a description and examples in `rocketctl <command> --help`.
+
 | Command                                                  | Description                             |
 | -------------------------------------------------------- | --------------------------------------- |
 | `rocketctl init`                                         | Initialize project                      |

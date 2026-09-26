@@ -11,9 +11,16 @@ import (
 var execCmd = &cobra.Command{
 	Use:   "exec [service] [command...]",
 	Short: "Execute a command in a running container",
-	Long:  `Executes a command inside a running container.`,
-	RunE:  runExec,
-	Args:  cobra.MinimumNArgs(2),
+	Long: `Runs a command interactively (docker exec -it) in the container
+<project>-<service> on this machine. The service is a rocket.yaml name and is
+always required, even in a single-service repo.
+
+Put '--' before a command that has its own flags, so rocketctl doesn't read them.`,
+	Example: `  rocketctl exec api bash
+  rocketctl exec api -- ls -la /app
+  rocketctl exec web -- sh -c 'env | sort'`,
+	RunE: runExec,
+	Args: cobra.MinimumNArgs(2),
 }
 
 func init() {

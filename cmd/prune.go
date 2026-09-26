@@ -15,8 +15,14 @@ import (
 var pruneCmd = &cobra.Command{
 	Use:   "prune",
 	Short: "Clean up old Docker images",
-	Long:  `Removes Docker images for the current project that are not the current version.`,
-	RunE:  runPrune,
+	Long: `Removes this project's Docker images on this machine that are not the
+current .rocket-version, in both the <project>_<service> and the
+<registry>/<project>_<service> form. It lists them and asks before removing.
+
+Only local images are touched. To also clean the server and ECR (keeping the
+previous version for rollback), use 'rocketctl deploy --clean'.`,
+	Example: `  rocketctl prune`,
+	RunE:    runPrune,
 }
 
 func init() {

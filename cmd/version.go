@@ -11,8 +11,13 @@ import (
 var versionCmd = &cobra.Command{
 	Use:   "version [service]",
 	Short: "Show version for a service",
-	Long:  `Shows the current version of a service or all services.`,
-	RunE:  runVersion,
+	Long: `Prints the .rocket-version of one service, or of every service when no name
+is given. A missing .rocket-version is created at 0.1.0.
+
+For the version of rocketctl itself, use 'rocketctl --version'.`,
+	Example: `  rocketctl version        # every service
+  rocketctl version api    # one service`,
+	RunE: runVersion,
 }
 
 func init() {

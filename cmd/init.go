@@ -16,8 +16,18 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize a project for use with RocketCTL",
-	Long:  `Creates rocket.yaml, .rocket-version files, and template files for a new project.`,
-	RunE:  runInit,
+	Long: `Asks a few questions (project, registry, region, domain, server, services)
+and creates:
+
+  rocket.yaml              the project config every other command reads
+  .rocket-version          one per service, starting at 0.1.0
+  docker-compose.prod.yml  production stack; edit it freely afterwards
+  caddy/Caddyfile          only when a domain is given
+
+Files are generated once and are yours to edit; init refuses to run when
+rocket.yaml already exists.`,
+	Example: `  rocketctl init`,
+	RunE:    runInit,
 }
 
 func init() {

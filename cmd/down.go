@@ -14,8 +14,12 @@ var (
 var downCmd = &cobra.Command{
 	Use:   "down",
 	Short: "Stop services",
-	Long:  `Stops and removes containers created by docker compose. Use --prod to stop production/test containers.`,
-	RunE:  runDown,
+	Long: `Stops and removes the containers docker compose started on this machine:
+docker-compose.yml by default, or docker-compose.prod.yml with --prod. Volumes
+are kept. It does not touch the deploy server.`,
+	Example: `  rocketctl down          # stop the dev stack
+  rocketctl down --prod   # stop the stack started by 'up --prod'`,
+	RunE: runDown,
 }
 
 func init() {

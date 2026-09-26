@@ -9,8 +9,10 @@ import (
 var psCmd = &cobra.Command{
 	Use:   "ps",
 	Short: "List running containers",
-	Long:  `Lists running containers for the current project.`,
-	RunE:  runPS,
+	Long: `Lists the running containers on this machine whose name contains the
+project name from rocket.yaml (docker ps --filter name=<project>).`,
+	Example: `  rocketctl ps`,
+	RunE:    runPS,
 }
 
 func init() {

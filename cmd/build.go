@@ -17,8 +17,23 @@ var (
 var buildCmd = &cobra.Command{
 	Use:   "build [service]",
 	Short: "Build a production Docker image",
-	Long: `Builds a production Docker image for a service, bumps the version, and updates .rocket-version.
-With --push, also pushes the new image to the registry. Deploy stays a separate step.`,
+	Long: `Builds the service's Dockerfile.production without cache, tags it as
+<project>_<service>:<new version> and <registry>/<project>_<service>:<new version>,
+then writes the new version to .rocket-version. The version is only written
+when the build succeeds.
+
+With --push, the new image is also pushed to ECR (same as 'rocketctl push').
+Deploy stays a separate step.
+
+The service argument is a name from rocket.yaml: required in a monorepo,
+ignored in a single-service repo (rocket.yaml's service is used).`,
+	Example: `  # Single-service repo
+  rocketctl build
+  rocketctl build --bump minor --push
+
+  # Monorepo
+  rocketctl build api --bump patch
+  rocketctl build web --bump major --push`,
 	RunE: runBuild,
 }
 

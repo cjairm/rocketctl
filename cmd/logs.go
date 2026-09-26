@@ -16,8 +16,15 @@ var (
 var logsCmd = &cobra.Command{
 	Use:   "logs [service]",
 	Short: "Show logs for a service",
-	Long:  `Shows logs for a service using docker compose. Use --prod to view production/test container logs.`,
-	RunE:  runLogs,
+	Long: `Shows docker compose logs on this machine, from docker-compose.yml or, with
+--prod, docker-compose.prod.yml. It does not read logs from the deploy server.
+
+The optional argument is a rocket.yaml service; it maps to the compose service
+<project>-<service>. Without it, logs from every service are shown.`,
+	Example: `  rocketctl logs                 # all dev services
+  rocketctl logs api -f          # follow one service
+  rocketctl logs --prod api -f   # the stack started by 'up --prod'`,
+	RunE: runLogs,
 }
 
 func init() {

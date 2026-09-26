@@ -12,8 +12,11 @@ import (
 var listCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all services",
-	Long:  `Lists all services for the current project with their versions.`,
-	RunE:  runList,
+	Long: `Prints a table of every service in rocket.yaml with its current
+.rocket-version and its directory. A missing .rocket-version is created at
+0.1.0.`,
+	Example: `  rocketctl list`,
+	RunE:    runList,
 }
 
 func init() {

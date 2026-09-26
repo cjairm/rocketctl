@@ -13,8 +13,16 @@ import (
 var pushCmd = &cobra.Command{
 	Use:   "push [service]",
 	Short: "Push a built image to the container registry",
-	Long:  `Authenticates with the container registry and pushes the built image.`,
-	RunE:  runPush,
+	Long: `Logs in to ECR with your local AWS CLI and pushes
+<registry>/<project>_<service>:<version>, where version is the service's
+current .rocket-version. It does not build; run 'rocketctl build' first, or
+use 'rocketctl build --push' to do both.
+
+The service argument is a name from rocket.yaml: required in a monorepo,
+ignored in a single-service repo (rocket.yaml's service is used).`,
+	Example: `  rocketctl push       # single-service repo
+  rocketctl push api   # monorepo`,
+	RunE: runPush,
 }
 
 func init() {
