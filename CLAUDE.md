@@ -24,6 +24,8 @@ Cobra commands in `cmd/`, logic in `internal/`. Deeper detail: `docs/architectur
   reading. Intentional — don't "fix" it.
 - **`rocketctl deploy` runs on a remote server and has no dry-run and no rollback.** It uploads
   files and restarts services over SSH. Never add auto-execution or widen its blast radius casually.
+  `--clean` is the one opt-in widening: it prunes the server and deletes ECR tags, but only after a
+  successful deploy and never the current or previous version (`version.Stale`).
 - **Remote paths are shell-quoted, not sanitised by luck.** `ssh.ShellQuote` wraps values that
   reach a remote shell, and `config.Validate` restricts `project`/`service` to
   `[A-Za-z0-9._-]`. Keep a leading `~` OUTSIDE the quotes - a quoted tilde is not expanded.

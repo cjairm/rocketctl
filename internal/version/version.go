@@ -3,6 +3,7 @@ package version
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -94,4 +95,66 @@ func validateSemver(version string) error {
 		}
 	}
 	return nil
+}
+
+// Stale returns the X.Y.Z tags older than the version just before current,
+// oldest first: what a cleanup may delete while keeping current and one
+// version to roll back to. Tags newer than current, and tags that are not
+// plain X.Y.Z (e.g. "latest"), are never returned.
+func Stale(tags []string, current string) []string {
+	cur, ok := parseSemver(current)
+	if !ok {
+		return nil
+	}
+
+	var older [][3]int
+	byVersion := map[[3]int]string{}
+	for _, tag := range tags {
+		v, ok := parseSemver(tag)
+		if !ok || compareSemver(v, cur) >= 0 {
+			continue
+		}
+		older = append(older, v)
+		byVersion[v] = tag
+	}
+	sort.Slice(older, func(i, j int) bool { return compareSemver(older[i], older[j]) < 0 })
+
+	// The last one is the previous version: kept for rollback.
+	if len(older) <= 1 {
+		return nil
+	}
+	stale := make([]string, 0, len(older)-1)
+	for _, v := range older[:len(older)-1] {
+		stale = append(stale, byVersion[v])
+	}
+	return stale
+}
+
+// parseSemver parses a plain X.Y.Z of digits only.
+func parseSemver(s string) ([3]int, bool) {
+	var v [3]int
+	parts := strings.Split(s, ".")
+	if len(parts) != 3 {
+		return v, false
+	}
+	for i, part := range parts {
+		if part == "" || strings.Trim(part, "0123456789") != "" {
+			return v, false
+		}
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return v, false
+		}
+		v[i] = n
+	}
+	return v, true
+}
+
+func compareSemver(a, b [3]int) int {
+	for i := range a {
+		if a[i] != b[i] {
+			return a[i] - b[i]
+		}
+	}
+	return 0
 }

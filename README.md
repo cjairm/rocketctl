@@ -194,6 +194,7 @@ project/
 | `rocketctl down`                                         | Stop dev environment                    |
 | `rocketctl down --prod`                                  | Stop production/test environment        |
 | `rocketctl deploy`                                       | Deploy to production                    |
+| `rocketctl deploy --clean`                               | Deploy, then free space (see below)     |
 | `rocketctl migrate [service]`                            | Dry-run the app's migrations on server  |
 | `rocketctl migrate [service] --apply [--yes]`            | Apply the app's migrations on server    |
 | `rocketctl ps`                                           | List running containers                 |
@@ -262,6 +263,16 @@ Deploy sets the tag of every compose service by image, not by name: any service 
 A built image that no compose service uses is flagged `⚠️  not pinned`. Services whose `image:` comes from a YAML anchor or merge key (`<<: *base`) are not followed; write `image:` on the service itself.
 
 Because the tag comes from `.rocket-version`, editing the tag in `docker-compose.prod.yml` no longer deploys an older version. To roll back, set `.rocket-version` to the older version and run `rocketctl deploy`, then set it back to the newest built version before the next `build`. Otherwise the next build reuses a version that already exists in ECR and overwrites that image.
+
+### Freeing space with `--clean`
+
+`rocketctl deploy --clean` runs only after the deploy succeeds, then:
+
+1. On the server: `docker container prune -f && docker image prune -a -f && docker volume prune -f && docker network prune -f && docker system prune -a -f`. This is server-wide: it affects every app on the server, not just this project. `docker volume prune` is skipped (with a warning) when the server's Docker is older than 23, because older versions also delete unused named volumes.
+2. In ECR: deletes this project's version tags older than the previous one. Deploying `1.3.0` keeps `1.3.0` and `1.2.0` and deletes `1.1.0` and older. Tags that aren't `X.Y.Z` (e.g. `latest`) are never touched. Your AWS user needs `ecr:BatchDeleteImage`.
+3. Locally: removes the same old versions of this project's images.
+
+The previous version stays in ECR, so rolling back one version (above) still works after a clean; anything older has to be rebuilt.
 
 ### Prerequisites
 

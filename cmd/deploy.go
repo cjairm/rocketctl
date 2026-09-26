@@ -7,10 +7,13 @@ import (
 	"os/user"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/cjairm/rocketctl/internal/compose"
 	"github.com/cjairm/rocketctl/internal/config"
+	"github.com/cjairm/rocketctl/internal/docker"
+	"github.com/cjairm/rocketctl/internal/registry"
 	"github.com/cjairm/rocketctl/internal/ssh"
 	"github.com/cjairm/rocketctl/internal/version"
 	"github.com/spf13/cobra"
@@ -25,12 +28,117 @@ authenticates with ECR, pulls latest images, and restarts services.
 The deploy command uses files from your project directory, not templates. Ensure your project has:
 - docker-compose.prod.yml (required)
 - caddy/Caddyfile (if using domain/reverse proxy)
-- .env.example (for initial .env creation on server)`,
+- .env.example (for initial .env creation on server)
+
+With --clean, after a successful deploy it frees space: prunes Docker on the server, and
+deletes this project's images older than the previous version from ECR and locally. The
+current and previous versions are kept so you can roll back.`,
 	RunE: runDeploy,
 }
 
+var deployClean bool
+
 func init() {
 	rootCmd.AddCommand(deployCmd)
+	deployCmd.Flags().BoolVar(
+		&deployClean,
+		"clean",
+		false,
+		"After a successful deploy, prune Docker on the server and delete images older than the previous version from ECR and locally",
+	)
+}
+
+// remoteCleanupCommand is the server-wide prune run by deploy --clean. Every
+// step takes -f: without it each one stops at a y/N prompt.
+func remoteCleanupCommand(pruneVolumes bool) string {
+	steps := []string{"docker container prune -f", "docker image prune -a -f"}
+	if pruneVolumes {
+		steps = append(steps, "docker volume prune -f")
+	}
+	steps = append(steps, "docker network prune -f", "docker system prune -a -f")
+	return strings.Join(steps, " && ")
+}
+
+// volumePruneIsSafe reports whether the server's Docker is 23 or newer, where
+// "docker volume prune" removes only anonymous volumes. Older versions also
+// remove unused named volumes, which hold data. Unknown versions are unsafe.
+func volumePruneIsSafe(serverVersion string) bool {
+	major, _, _ := strings.Cut(strings.TrimSpace(serverVersion), ".")
+	n, err := strconv.Atoi(major)
+	return err == nil && n >= 23
+}
+
+// staleLocalImages picks the local images of a service, in both the bare and
+// the registry-prefixed form, that are older than the version before current.
+func staleLocalImages(cfg *config.Config, service, current string, images []string) []string {
+	var stale []string
+	for _, repository := range []string{cfg.GetImageName(service), cfg.GetImageRepository(service)} {
+		var tags []string
+		for _, image := range images {
+			if tag, ok := strings.CutPrefix(image, repository+":"); ok {
+				tags = append(tags, tag)
+			}
+		}
+		for _, tag := range version.Stale(tags, current) {
+			stale = append(stale, repository+":"+tag)
+		}
+	}
+	return stale
+}
+
+// cleanAfterDeploy frees space once a deploy has succeeded: a Docker prune on
+// the server, then ECR and local images older than the previous version.
+func cleanAfterDeploy(client *ssh.Client, cfg *config.Config, serviceVersions map[string]string) error {
+	fmt.Println("🧹 Cleaning up the server...")
+	serverVersion, err := client.Exec("docker version --format '{{.Server.Version}}'")
+	pruneVolumes := err == nil && volumePruneIsSafe(serverVersion)
+	if !pruneVolumes {
+		fmt.Println(
+			"⚠️  Server Docker is older than 23 or unknown: skipping 'docker volume prune', which would also delete unused named volumes",
+		)
+	}
+	if err := client.ExecInteractive(remoteCleanupCommand(pruneVolumes)); err != nil {
+		return fmt.Errorf("server cleanup failed: %w", err)
+	}
+
+	fmt.Println("🧹 Deleting old images from ECR (keeping current and previous)...")
+	for _, service := range cfg.GetServices() {
+		repository := cfg.GetImageName(service)
+		tags, err := registry.ListImageTags(repository, cfg.Region)
+		if err != nil {
+			return err
+		}
+		stale := version.Stale(tags, serviceVersions[service])
+		if len(stale) == 0 {
+			fmt.Printf("   %s: nothing to delete\n", repository)
+			continue
+		}
+		if err := registry.DeleteImageTags(repository, cfg.Region, stale); err != nil {
+			return err
+		}
+		fmt.Printf("   %s: deleted %s\n", repository, strings.Join(stale, ", "))
+	}
+
+	fmt.Println("🧹 Removing old local images (keeping current and previous)...")
+	for _, service := range cfg.GetServices() {
+		var images []string
+		for _, repository := range []string{cfg.GetImageName(service), cfg.GetImageRepository(service)} {
+			found, err := docker.ListImages(repository)
+			if err != nil {
+				return err
+			}
+			images = append(images, found...)
+		}
+		for _, image := range staleLocalImages(cfg, service, serviceVersions[service], images) {
+			// A local container may still use it; that is not worth failing over.
+			if err := docker.RemoveImage(image); err != nil {
+				fmt.Printf("⚠️  %v\n", err)
+				continue
+			}
+			fmt.Printf("   removed %s\n", image)
+		}
+	}
+	return nil
 }
 
 // versionEnvAssignments renders the environment prefix that pins each service's
@@ -358,6 +466,13 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("✅ Deployment successful!")
+
+	if deployClean {
+		if err := cleanAfterDeploy(client, cfg, serviceVersions); err != nil {
+			return fmt.Errorf("deployment succeeded, but --clean failed: %w", err)
+		}
+		fmt.Println("✅ Cleanup complete")
+	}
 	fmt.Printf(
 		"\n📊 To view logs: ssh %s@%s 'cd %s && docker compose logs -f'\n",
 		sshUser,
