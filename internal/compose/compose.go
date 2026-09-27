@@ -81,9 +81,10 @@ func Logs(composeFile string, service string, follow bool) error {
 	return cmd.Run()
 }
 
-// Exec executes a command in a running container
+// Exec executes a command in a running container. A TTY is requested only when
+// stdin is a terminal; docker rejects -t otherwise ("the input device is not a TTY").
 func Exec(containerName string, command []string) error {
-	args := []string{"exec", "-it", containerName}
+	args := []string{"exec", execFlags(stdinIsTerminal()), containerName}
 	args = append(args, command...)
 
 	cmd := exec.Command("docker", args...)
@@ -92,6 +93,19 @@ func Exec(containerName string, command []string) error {
 	cmd.Stdin = os.Stdin
 
 	return cmd.Run()
+}
+
+// execFlags keeps stdin open always, and adds a TTY only for a terminal.
+func execFlags(tty bool) string {
+	if tty {
+		return "-it"
+	}
+	return "-i"
+}
+
+func stdinIsTerminal() bool {
+	info, err := os.Stdin.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 // PS lists containers

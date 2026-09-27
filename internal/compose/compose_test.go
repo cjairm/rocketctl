@@ -145,3 +145,18 @@ func TestPinImagesRejectsImageSpanningLines(t *testing.T) {
 		t.Errorf("PinImages() error = %v, want one asking for a single line", err)
 	}
 }
+
+func TestExecFlags(t *testing.T) {
+	tests := []struct {
+		tty  bool
+		want string
+	}{
+		{tty: true, want: "-it"},
+		{tty: false, want: "-i"},
+	}
+	for _, tt := range tests {
+		if got := execFlags(tt.tty); got != tt.want {
+			t.Errorf("execFlags(%v) = %q, want %q", tt.tty, got, tt.want)
+		}
+	}
+}

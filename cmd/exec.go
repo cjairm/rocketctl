@@ -9,14 +9,16 @@ import (
 var execCmd = &cobra.Command{
 	Use:   "exec [service] [command...]",
 	Short: "Execute a command in a running container",
-	Long: `Runs a command interactively (docker exec -it) in the container
-<project>-<service> on this machine. The service is a rocket.yaml name and is
-always required, even in a single-service repo.
+	Long: `Runs a command (docker exec -it) in the container <project>-<service>
+on this machine. The service is a rocket.yaml name and is always required, even
+in a single-service repo. When stdin is not a terminal (a pipe, CI, cron) it
+runs without a TTY (docker exec -i).
 
 Put '--' before a command that has its own flags, so rocketctl doesn't read them.`,
 	Example: `  rocketctl exec api bash
   rocketctl exec api -- ls -la /app
-  rocketctl exec web -- sh -c 'env | sort'`,
+  rocketctl exec web -- sh -c 'env | sort'
+  echo 'select 1' | rocketctl exec db -- psql -U app`,
 	RunE: runExec,
 	Args: cobra.MinimumNArgs(2),
 }
