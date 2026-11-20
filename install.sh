@@ -124,25 +124,23 @@ fi
 echo -e "${GREEN}✓ Binary installed to $INSTALL_DIR/$BINARY_NAME${NC}"
 
 # Detect shell configuration file
-SHELL_CONFIG=""
-if [ -n "$ZSH_VERSION" ]; then
-    SHELL_CONFIG="$HOME/.zshrc"
-elif [ -n "$BASH_VERSION" ]; then
-    if [ -f "$HOME/.bash_profile" ]; then
-        SHELL_CONFIG="$HOME/.bash_profile"
-    else
-        SHELL_CONFIG="$HOME/.bashrc"
-    fi
-else
-    # Default to .zshrc as it's common on macOS
-    if [ -f "$HOME/.zshrc" ]; then
-        SHELL_CONFIG="$HOME/.zshrc"
-    elif [ -f "$HOME/.bash_profile" ]; then
-        SHELL_CONFIG="$HOME/.bash_profile"
-    else
-        SHELL_CONFIG="$HOME/.bashrc"
-    fi
-fi
+# Use the login shell ($SHELL), not the one running this script: with
+# "curl | bash" that is always bash.
+case "$(basename "${SHELL:-}")" in
+    zsh)
+        SHELL_CONFIG="${ZDOTDIR:-$HOME}/.zshrc"
+        ;;
+    bash)
+        if [ -f "$HOME/.bash_profile" ]; then
+            SHELL_CONFIG="$HOME/.bash_profile"
+        else
+            SHELL_CONFIG="$HOME/.bashrc"
+        fi
+        ;;
+    *)
+        SHELL_CONFIG="$HOME/.zshrc" # macOS default shell
+        ;;
+esac
 
 # Add to PATH if not already present
 PATH_LINE="export PATH=\"\$HOME/.local/bin:\$PATH\""
