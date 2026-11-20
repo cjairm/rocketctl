@@ -368,3 +368,28 @@ func TestComposeServiceName(t *testing.T) {
 		t.Errorf("ComposeServiceName() = %q, want %q", got, "myapp-api")
 	}
 }
+
+func TestValidatePlatform(t *testing.T) {
+	tests := []struct {
+		platform string
+		wantErr  bool
+	}{
+		{"", false},
+		{"linux/amd64", false},
+		{"linux/arm64/v8", false},
+		{"amd64", true},
+		{"linux/", true},
+		{"Linux/AMD64", true},
+		{"linux/amd64;x", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.platform, func(t *testing.T) {
+			cfg := singleService()
+			cfg.Platform = tt.platform
+			err := cfg.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Validate(platform=%q) error = %v, wantErr %v", tt.platform, err, tt.wantErr)
+			}
+		})
+	}
+}

@@ -17,6 +17,7 @@ type BuildOptions struct {
 	Context    string
 	BuildArgs  map[string]string
 	NoCache    bool
+	Platform   string
 }
 
 // Build builds a Docker image
@@ -25,6 +26,10 @@ func Build(opts BuildOptions) error {
 
 	if opts.NoCache {
 		args = append(args, "--no-cache")
+	}
+
+	if opts.Platform != "" {
+		args = append(args, "--platform", opts.Platform)
 	}
 
 	// Add build args

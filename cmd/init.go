@@ -130,6 +130,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cfg.Registry = registry
 	cfg.Region = region
 	cfg.Domain = domain
+	cfg.Platform = "linux/amd64"
 	cfg.IP = ip
 	cfg.SSHUser = sshUser
 	cfg.SSHKeyPath = sshKeyPath
@@ -220,6 +221,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("3. Create .env.example with the variables your services need")
 	fmt.Println("   (deploy uploads it as .env on the server the first time)")
 	fmt.Println("4. Customize docker-compose.prod.yml as needed")
+	fmt.Println("   platform is linux/amd64: change it in rocket.yaml if your server isn't x86_64 (check with `uname -m`)")
 	if cfg.Domain != "" {
 		fmt.Println("5. Customize caddy/Caddyfile as needed")
 	}

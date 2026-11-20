@@ -107,6 +107,7 @@ service: backend
 registry: 123456789.dkr.ecr.us-east-2.amazonaws.com
 region: us-east-2
 domain: api.myapp.com      # optional
+platform: linux/amd64      # optional - what the server runs; omit to build for this machine
 ip: 192.168.1.100          # optional - for SSH deployment
 ssh_user: ubuntu           # optional - defaults to current user
 ssh_key_path: ~/my-key.pem # optional - custom SSH key (e.g., AWS EC2 .pem file)
@@ -119,6 +120,7 @@ project: myapp
 registry: 123456789.dkr.ecr.us-east-2.amazonaws.com
 region: us-east-2
 domain: myapp.com          # optional
+platform: linux/amd64      # optional - what the server runs; omit to build for this machine
 ip: 192.168.1.100          # optional - for SSH deployment
 ssh_user: ubuntu           # optional - defaults to current user
 ssh_key_path: ~/my-key.pem # optional - custom SSH key (e.g., AWS EC2 .pem file)

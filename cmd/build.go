@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/cjairm/rocketctl/internal/config"
 	"github.com/cjairm/rocketctl/internal/docker"
@@ -107,6 +108,10 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		Dockerfile: dockerfilePath,
 		Context:    serviceDir,
 		NoCache:    true,
+		Platform:   cfg.Platform,
+	}
+	if cfg.Platform == "" {
+		fmt.Printf("⚠️  platform not set in rocket.yaml: building for this machine (%s)\n", runtime.GOARCH)
 	}
 
 	if err := docker.Build(buildOpts); err != nil {

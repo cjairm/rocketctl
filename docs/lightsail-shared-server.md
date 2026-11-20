@@ -65,7 +65,7 @@ container over a shared Docker network called `edge`. Only the containers Caddy 
 
 ## What rocketctl already keeps apart
 
-I read `cmd/deploy.go`, `internal/container`, `internal/jobs` and the `init` templates. Per project,
+I read `cmd/deploy.go`, `internal/container` and the `init` templates. Per project,
 rocketctl gives you:
 
 | What            | How                                                                                                                                | Where                          |
@@ -75,7 +75,6 @@ rocketctl gives you:
 | Container names | The template names them `<project>-<service>`                                                                                      | `docker-compose.prod.yml.tmpl` |
 | Secrets         | One `.env` per service, mode 600, uploaded once and never overwritten                                                              | `cmd/deploy.go`                |
 | Migrations      | Finds the container by the label `com.docker.compose.service=<project>-<service>`. Unique as long as names keep the project prefix | `internal/container`           |
-| Scheduled jobs  | One scheduler per project, labeled `rocketctl.scheduler=<project>`. A deploy only removes its own                                  | `internal/jobs`                |
 | Versions        | Each service's tag comes from its own `.rocket-version`                                                                            | `cmd/deploy.go`                |
 
 Deploying CochinitoApp never restarts AutomatedHub's containers.
@@ -113,7 +112,7 @@ project (step 5). Moving it to rocketctl is a separate decision (see "Not covere
 **4. Image CPU type.** rocketctl builds without `--platform`, so Docker builds for the machine
 running the build. This Mac is Apple Silicon (`arm64`). Lightsail servers run x86_64 (check with
 `uname -m` on the server). An `arm64` image on an x86_64 server fails with `exec format error`.
-_Fix:_ build with `DOCKER_DEFAULT_PLATFORM=linux/amd64` (step 4). Check what runs today with
+_Fix:_ set `platform: linux/amd64` in `rocket.yaml`. Check what runs today with
 `docker image inspect --format '{{.Architecture}}' <image>` on the current servers.
 
 **5. AutomatedHub devices connect to the broker by IP address.** The firmware examples hardcode the
@@ -317,12 +316,17 @@ cochinito.app {
 step 1, or remove the line if you uploaded `~/.ssh/id_ed25519`, which rocketctl finds on its own.
 Keep `domain` set, because rocketctl only uploads the Caddyfile when it is.
 
-**Build for x86_64 and deploy:**
+**Deploy.** The images already in ECR run on the t3a (x86_64) instances today, so they are amd64
+and the first deploy needs no build. Check with
+`docker image inspect --format '{{.Architecture}}' <image>` on the old server. If you do build,
+every `rocketctl build` bumps the version (`--bump` defaults to `patch`), and on this Mac it
+needs `platform: linux/amd64` in `rocket.yaml`:
 
 ```bash
-export DOCKER_DEFAULT_PLATFORM=linux/amd64   # the Mac is arm64, Lightsail is x86_64
-rocketctl build api --push                    # current version, no bump, unless the code changed
+# Only if you need a new build:
+rocketctl build api --push                    # bumps the patch version
 rocketctl build web --push
+
 rocketctl deploy
 ```
 
@@ -500,11 +504,10 @@ After a few quiet days:
 
 ## Day-to-day
 
-**Deploying CochinitoApp:** the same as `docs/DEPLOYMENT.md` in that repo, plus the platform
-variable:
+**Deploying CochinitoApp:** the same as `docs/DEPLOYMENT.md` in that repo, with
+`platform: linux/amd64` in `rocket.yaml`:
 
 ```bash
-export DOCKER_DEFAULT_PLATFORM=linux/amd64
 rocketctl build api --bump minor --push
 rocketctl deploy            # add --clean only while every project on the server is running
 rocketctl migrate api && rocketctl migrate api --apply
@@ -531,7 +534,7 @@ Adding a project means following these rules. They're what keeps projects out of
 3. Its `caddy/Caddyfile` contains site blocks only. Add one mount line to
    `~/apps/edge/docker-compose.yml`, run `docker compose up -d` there, then reload Caddy.
 4. Container and Compose service names start with `<project>-`. The rocketctl template does this,
-   and `migrate` and jobs depend on it.
+   and `migrate` depends on it.
 5. Every service has a `mem_limit`, so one project's leak can't take down the others.
 6. Data lives in **named** volumes, so `--clean` can't delete it.
 7. Any other host port (like 1883) is unique on the server and opened in the Lightsail firewall.
@@ -551,8 +554,6 @@ These are gaps found while writing this guide. Nothing here has been built:
   with versions in `automatedhub_cli/automatedhub_<service>/.version`. Using rocketctl only for
   deploys would mean keeping two version files in sync by hand.
 - **`deploy` doesn't reload the shared Caddy** after uploading a changed Caddyfile.
-- **`build` has no platform option.** The `DOCKER_DEFAULT_PLATFORM` variable works, but it's easy to
-  forget, and forgetting it fails only at deploy time.
 - **`init` assumes one project per server**, because of its `caddy` service on ports 80 and 443.
 - **`--clean` acts on the whole server**, which matters more now that several projects share one.
 

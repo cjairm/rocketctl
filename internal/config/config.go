@@ -19,6 +19,7 @@ type Config struct {
 	Registry   string   `yaml:"registry"`
 	Region     string   `yaml:"region"`
 	Domain     string   `yaml:"domain,omitempty"`
+	Platform   string   `yaml:"platform,omitempty"` // Target os/arch for builds, e.g. linux/amd64
 	IP         string   `yaml:"ip,omitempty"`           // Server IP for SSH deployment
 	SSHUser    string   `yaml:"ssh_user,omitempty"`     // SSH user (defaults to current user)
 	SSHKeyPath string   `yaml:"ssh_key_path,omitempty"` // Custom SSH key path (e.g., ~/my-key.pem)
@@ -78,6 +79,12 @@ func (c *Config) Validate() error {
 	if err := validateName("region", c.Region); err != nil {
 		return err
 	}
+	if c.Platform != "" && !platformPattern.MatchString(c.Platform) {
+		return fmt.Errorf(
+			"invalid platform %q in rocket.yaml: use os/arch[/variant], e.g. linux/amd64",
+			c.Platform,
+		)
+	}
 
 	// Two services whose names differ only by '-', '.' or '_' would share one
 	// compose variable, silently pinning both to whichever version is written
@@ -105,6 +112,9 @@ func (c *Config) Validate() error {
 // namePattern matches names that are safe everywhere RocketCTL puts them: a
 // Docker image component, a remote shell path segment and a compose variable.
 var namePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// platformPattern matches os/arch[/variant], the form docker build --platform takes.
+var platformPattern = regexp.MustCompile(`^[a-z0-9]+/[a-z0-9]+(/[a-z0-9]+)?$`)
 
 // hostPattern matches a registry host, optionally with a port. Registry and
 // region are interpolated unquoted into the remote ECR login command, so they
