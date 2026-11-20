@@ -22,7 +22,12 @@ and creates:
   rocket.yaml              the project config every other command reads
   .rocket-version          one per service, starting at 0.1.0
   docker-compose.prod.yml  production stack; edit it freely afterwards
-  caddy/Caddyfile          only when a domain is given
+  caddy/Caddyfile          only when a domain is given (site blocks only)
+
+rocket.yaml gets platform: linux/amd64; change it if your server isn't x86_64.
+With a domain it also gets shared_proxy: true: the project uses the server's
+shared Caddy (see 'rocketctl deploy --help'), so the compose file has no Caddy
+service. Uncomment "- edge" on the service Caddy routes to.
 
 Files are generated once and are yours to edit; init refuses to run when
 rocket.yaml already exists.`,

@@ -37,6 +37,15 @@ caddy/Caddyfile when a domain is set; upload .env.example as .env only if the
 server has no .env yet (edit the real values on the server); log in to ECR on
 the server; docker compose pull; docker compose up -d.
 
+With shared_proxy: true in rocket.yaml, several projects share one Caddy on
+the server. Instead of uploading caddy/Caddyfile into the project, deploy:
+  - creates ~/apps/edge (Caddy on ports 80/443 and the "edge" network) if it
+    is missing; its docker-compose.yml and Caddyfile are never overwritten
+  - installs caddy/Caddyfile as ~/apps/edge/sites/<project>.caddy
+  - reloads Caddy, and restores the previous site file if Caddy rejects it
+It stops before connecting if caddy/Caddyfile is missing or no service in
+docker-compose.prod.yml joins the "edge" network.
+
 With --clean, once the deploy succeeds, it frees space:
   server  removes this project's versions older than the previous one, then
           dangling image layers; other projects' resources are never touched

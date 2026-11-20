@@ -29,7 +29,9 @@ optional argument is a service name from that file, passed straight to compose.
 With --prod: builds each service's Dockerfile.production at its current
 .rocket-version (no version bump), then starts the whole docker-compose.prod.yml
 stack in the background, to test production locally. The optional argument is
-a rocket.yaml service: only that one is rebuilt, but the whole stack starts.`,
+a rocket.yaml service: only that one is rebuilt, but the whole stack starts.
+It builds for this machine, ignoring rocket.yaml's platform, and creates the
+"edge" network first when a service joins it (shared_proxy projects).`,
 	Example: `  rocketctl up                       # dev stack
   rocketctl up --build               # rebuild dev images first
   rocketctl up --build --no-cache
@@ -142,7 +144,10 @@ func runUp(cmd *cobra.Command, args []string) error {
 
 	// A shared-proxy compose file declares "edge" as external; deploy creates it
 	// on the server, so here it has to exist on this machine.
-	if content, err := os.ReadFile("docker-compose.prod.yml"); err == nil && compose.UsesNetwork(content, "edge") {
+	if content, err := os.ReadFile(
+		"docker-compose.prod.yml",
+	); err == nil &&
+		compose.UsesNetwork(content, "edge") {
 		// "already exists" is expected on every run after the first.
 		_ = exec.Command("docker", "network", "create", "edge").Run()
 	}

@@ -23,6 +23,10 @@ var buildCmd = &cobra.Command{
 then writes the new version to .rocket-version. The version is only written
 when the build succeeds.
 
+It builds for rocket.yaml's platform (e.g. linux/amd64), so an Apple Silicon
+Mac builds images an x86_64 server can run. Without platform it builds for
+this machine and prints a warning.
+
 With --push, the new image is also pushed to ECR (same as 'rocketctl push').
 Deploy stays a separate step.
 
