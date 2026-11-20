@@ -397,6 +397,8 @@ overwrites). Add `- edge` under `networks:` of the service Caddy routes to, and 
 `edge` is reserved. For a project not deployed with rocketctl, copy its site file to
 `~/apps/edge/sites/<name>.caddy` and run `docker exec edge-caddy caddy reload --config /etc/caddy/Caddyfile`.
 
+To confirm it all works on a real server, run the checks in `docs/shared-server-checks.md`.
+
 ### Deployment Directory Structure
 
 On your production server, files are organized as:
