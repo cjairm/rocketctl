@@ -1,29 +1,13 @@
 networks:
   {{.Project}}-network:
     driver: bridge
-
-services:
 {{- if .Domain}}
-  caddy:
-    image: caddy:2-alpine
-    container_name: {{.Project}}-caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - {{.Project}}-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+  # Created by rocketctl deploy (shared_proxy). Caddy lives there, not in this file.
+  edge:
+    external: true
 {{- end}}
 
+services:
 {{- range .Services}}
   {{$.Project}}-{{.}}:
     image: {{$.Registry}}/{{$.Project}}_{{.}}:${{"{"}}{{. | envkey}}:-latest{{"}"}}
@@ -33,6 +17,10 @@ services:
       - ./{{if $.IsMonorepo}}{{.}}/{{end}}.env
     networks:
       - {{$.Project}}-network
+{{- if $.Domain}}
+      # Join "edge" only if Caddy routes to this service:
+      #   - edge
+{{- end}}
     logging:
       driver: "json-file"
       options:
@@ -46,9 +34,3 @@ services:
     #   - "8000"
     # Add your service-specific configuration here (volumes, healthchecks, etc.)
 {{end}}
-
-{{- if .Domain}}
-volumes:
-  caddy_data:
-  caddy_config:
-{{- end}}

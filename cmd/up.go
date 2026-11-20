@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/cjairm/rocketctl/internal/compose"
 	"github.com/cjairm/rocketctl/internal/config"
@@ -137,6 +138,13 @@ func runUp(cmd *cobra.Command, args []string) error {
 		// EnvVersionKey always produces a valid one. Written out so errcheck
 		// sees a deliberate discard rather than an accidental one.
 		_ = os.Setenv(config.EnvVersionKey(service), currentVersion)
+	}
+
+	// A shared-proxy compose file declares "edge" as external; deploy creates it
+	// on the server, so here it has to exist on this machine.
+	if content, err := os.ReadFile("docker-compose.prod.yml"); err == nil && compose.UsesNetwork(content, "edge") {
+		// "already exists" is expected on every run after the first.
+		_ = exec.Command("docker", "network", "create", "edge").Run()
 	}
 
 	// Start the entire stack using docker compose

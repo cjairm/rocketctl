@@ -131,6 +131,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	cfg.Region = region
 	cfg.Domain = domain
 	cfg.Platform = "linux/amd64"
+	cfg.SharedProxy = domain != ""
 	cfg.IP = ip
 	cfg.SSHUser = sshUser
 	cfg.SSHKeyPath = sshKeyPath
@@ -205,10 +206,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Generate Caddyfile if domain was provided
 	if cfg.Domain != "" {
-		fmt.Print("Email for Caddy HTTPS certificates: ")
-		email, _ := reader.ReadString('\n')
-		email = strings.TrimSpace(email)
-		templateData.Email = email
 		if err := templates.GenerateCaddyfile(templateData, "caddy/Caddyfile"); err != nil {
 			return err
 		}
@@ -223,7 +220,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("4. Customize docker-compose.prod.yml as needed")
 	fmt.Println("   platform is linux/amd64: change it in rocket.yaml if your server isn't x86_64 (check with `uname -m`)")
 	if cfg.Domain != "" {
-		fmt.Println("5. Customize caddy/Caddyfile as needed")
+		fmt.Println("5. Customize caddy/Caddyfile as needed, and add \"- edge\" under networks: of the service Caddy routes to")
 	}
 	return nil
 }

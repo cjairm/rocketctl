@@ -1,6 +1,7 @@
 package templates
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -48,5 +49,32 @@ func TestEdgeComposeIsValidYAML(t *testing.T) {
 	}
 	if _, ok := doc["services"]; !ok {
 		t.Error("edge compose has no services")
+	}
+}
+
+func TestRenderWithDomainLeavesProxyToTheEdge(t *testing.T) {
+	data := TemplateData{Project: "myapp", Services: []string{"api"}, Registry: "reg.example.com", Domain: "myapp.com"}
+	out, err := RenderDockerComposeProd(data)
+	if err != nil {
+		t.Fatalf("render failed: %v", err)
+	}
+	if strings.Contains(out, "caddy") || strings.Contains(out, "80:80") {
+		t.Errorf("compose still has its own Caddy:\n%s", out)
+	}
+	if !strings.Contains(out, "edge:\n    external: true") {
+		t.Errorf("compose does not declare the external edge network:\n%s", out)
+	}
+	if err := yaml.Unmarshal([]byte(out), &map[string]any{}); err != nil {
+		t.Errorf("rendered compose is not valid YAML: %v", err)
+	}
+
+	dir := t.TempDir()
+	path := dir + "/Caddyfile"
+	if err := GenerateCaddyfile(data, path); err != nil {
+		t.Fatal(err)
+	}
+	caddy, _ := os.ReadFile(path)
+	if strings.Contains(string(caddy), "email") {
+		t.Errorf("Caddyfile has a global email block:\n%s", caddy)
 	}
 }

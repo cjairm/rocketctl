@@ -533,7 +533,7 @@ Adding a project means following these rules. They're what keeps projects out of
 8. Its secrets live in its own `.env` files, mode 600. Each project uses its own credentials, never
    another project's.
 
-For a new rocketctl project, `rocketctl init` still generates a `caddy` service with ports 80 and 443. Delete it and add the `edge` network as in step 4.
+`rocketctl init` generates the shared layout: no `caddy` service, `shared_proxy: true`, and a commented `- edge` line to uncomment on the service Caddy routes to.
 
 ## Not covered, and rocketctl changes worth considering
 
@@ -545,7 +545,6 @@ These are gaps found while writing this guide. Nothing here has been built:
   `rocket.yaml`, but AutomatedHub keeps each service in its own repository (`automatedhub_api/`, …)
   with versions in `automatedhub_cli/automatedhub_<service>/.version`. Using rocketctl only for
   deploys would mean keeping two version files in sync by hand.
-- **`init` assumes one project per server**, because of its `caddy` service on ports 80 and 443.
 
 ## Sources
 

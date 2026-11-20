@@ -5,6 +5,17 @@ All notable changes to RocketCTL will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `platform` in `rocket.yaml`: `build` passes it as `--platform`; `init` writes `linux/amd64`.
+- `shared_proxy: true`: deploy creates `~/apps/edge`, installs the project's Caddyfile in `edge/sites/` and reloads Caddy, restoring the old file if Caddy rejects the new one.
+- `compose.UsesNetwork`; `up --prod` creates the `edge` network when the compose file uses it.
+
+### Changed
+- `deploy --clean` removes only this project's old images and dangling layers on the server. It no longer prunes containers, networks or volumes.
+- `init` no longer generates a Caddy service or asks for an email; it writes `shared_proxy: true` when a domain is given.
+
 ## [1.4.0] - 2026-02-21
 
 ### Added

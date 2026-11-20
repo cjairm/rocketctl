@@ -76,7 +76,7 @@ cd your-project
 rocketctl init
 ```
 
-Creates `rocket.yaml`, `.rocket-version` (0.1.0), `docker-compose.prod.yml`, and optionally `caddy/Caddyfile`.
+Creates `rocket.yaml`, `.rocket-version` (0.1.0), `docker-compose.prod.yml`, and optionally `caddy/Caddyfile`. With a domain, `init` writes `shared_proxy: true`, no Caddy service in the compose file and a Caddyfile with site blocks only. It always writes `platform: linux/amd64`.
 
 ### 2. Create Dockerfiles
 
@@ -435,10 +435,10 @@ ssh user@server-ip 'cd ~/apps/myproject && docker compose pull api && docker com
 ssh user@server-ip 'cd ~/apps/myproject && docker compose pull && docker compose up -d'
 ```
 
-**Restart Caddy reverse proxy:**
+**Reload the shared Caddy** (projects with `shared_proxy: true`; deploy already does this):
 
 ```bash
-ssh user@server-ip 'cd ~/apps/myproject && docker stop apps_caddy_1 && docker rm apps_caddy_1 && docker compose up -d'
+ssh user@server-ip 'docker exec edge-caddy caddy reload --config /etc/caddy/Caddyfile'
 ```
 
 ### Cleanup Commands

@@ -40,7 +40,6 @@ type TemplateData struct {
 	Registry   string
 	Region     string
 	Domain     string
-	Email      string
 	IsMonorepo bool
 }
 
