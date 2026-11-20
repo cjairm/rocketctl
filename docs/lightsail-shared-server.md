@@ -89,20 +89,6 @@ _Fix:_ remove the `caddy` service from every project and run one shared Caddy in
 (step 3). Each project keeps its own `caddy/Caddyfile` with only its own site blocks, and rocketctl
 keeps uploading it as it does today. The shared Caddy reads all of them with `import`.
 
-**2. `rocketctl deploy --clean` prunes the whole server, not just one project.** It runs
-`docker container prune -f && docker image prune -a -f && docker volume prune -f && docker network
-prune -f && docker system prune -a -f`. On a shared server that means:
-
-- Stopped containers of **any** project are deleted. Running `docker compose up -d` recreates them.
-- Images of **any** project that no container is using are deleted, including another project's
-  rollback image. They can be pulled from ECR again.
-- Networks with no containers are deleted. This is why `edge` is defined by the edge project (step
-  3): `docker compose up -d` there recreates it.
-- Anonymous volumes are deleted (named volumes are safe on Docker 23 and newer, and rocketctl checks
-  the version). **Database data must live in a named volume.**
-
-_Fix:_ use `--clean` only while every project is running, and always use named volumes.
-
 **3. AutomatedHub isn't deployed with rocketctl.** Its own CLI (`automatedhub_cli`) builds images
 and pushes them to ECR, and the deploy is done by hand on the server from `~/apps` (not
 `~/apps/automatedhub`), with the old `docker-compose` v1.
@@ -509,7 +495,7 @@ After a few quiet days:
 
 ```bash
 rocketctl build api --bump minor --push
-rocketctl deploy            # add --clean only while every project on the server is running
+rocketctl deploy            # --clean only touches this project's images
 rocketctl migrate api && rocketctl migrate api --apply
 ```
 
@@ -555,7 +541,6 @@ These are gaps found while writing this guide. Nothing here has been built:
   deploys would mean keeping two version files in sync by hand.
 - **`deploy` doesn't reload the shared Caddy** after uploading a changed Caddyfile.
 - **`init` assumes one project per server**, because of its `caddy` service on ports 80 and 443.
-- **`--clean` acts on the whole server**, which matters more now that several projects share one.
 
 ## Sources
 

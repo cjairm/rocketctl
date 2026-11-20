@@ -281,7 +281,7 @@ Because the tag comes from `.rocket-version`, editing the tag in `docker-compose
 
 `rocketctl deploy --clean` runs only after the deploy succeeds, then:
 
-1. On the server: `docker container prune -f && docker image prune -a -f && docker volume prune -f && docker network prune -f && docker system prune -a -f`. This is server-wide: it affects every app on the server, not just this project. `docker volume prune` is skipped (with a warning) when the server's Docker is older than 23, because older versions also delete unused named volumes.
+1. On the server: removes this project's version tags older than the previous one, then runs `docker image prune -f` (dangling layers only). Containers, networks and volumes are never touched, so other projects on the same server are safe.
 2. In ECR: deletes this project's version tags older than the previous one. Deploying `1.3.0` keeps `1.3.0` and `1.2.0` and deletes `1.1.0` and older. Tags that aren't `X.Y.Z` (e.g. `latest`) are never touched. Your AWS user needs `ecr:BatchDeleteImage`.
 3. Locally: removes the same old versions of this project's images.
 

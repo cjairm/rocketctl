@@ -91,9 +91,9 @@ Derived values. Note `filepath.Join` **cleans** its result, so a monorepo servic
 7. Run ECR login, then `docker compose pull` and `docker compose up -d` remotely with each
    service's `<SERVICE>_VERSION` set from its local `.rocket-version`, so the server runs the
    version that was built rather than falling back to `:latest`.
-8. Only with `--clean`, and only after step 7 succeeds (`cleanAfterDeploy`): run the server-wide
-   Docker prune chain (`remoteCleanupCommand`; `volume prune` only when the server's Docker is
-   23+, per `volumePruneIsSafe`), then delete ECR tags and local images that `version.Stale`
+8. Only with `--clean`, and only after step 7 succeeds (`cleanAfterDeploy`): remove this
+   project's old image tags on the server (`staleImages`) and run `docker image prune -f`
+   (dangling layers only; containers, networks and volumes are never touched), then delete ECR tags and local images that `version.Stale`
    returns: X.Y.Z tags older than the one just before the deployed version. Current and
    previous always survive, so a one-version rollback can still pull from ECR.
 
