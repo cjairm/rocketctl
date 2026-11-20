@@ -7,14 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-11-19
+
 ### Added
-- `platform` in `rocket.yaml`: `build` passes it as `--platform`; `init` writes `linux/amd64`.
-- `shared_proxy: true`: deploy creates `~/apps/edge`, installs the project's Caddyfile in `edge/sites/` and reloads Caddy, restoring the old file if Caddy rejects the new one.
-- `compose.UsesNetwork`; `up --prod` creates the `edge` network when the compose file uses it.
+- `rocketctl migrate` runs the migration command the app declares as an image label, inside the service's running container on the server.
+- `rocketctl backup` runs the backup command the app declares as an image label, on this machine, and saves the file under `~/.rocketctl/backups/<project>/`. `rocketctl restore` loads a backup into the local dev stack.
+- `rocketctl deploy --clean` frees space after a successful deploy: removes this project's versions older than the previous one on the server, in ECR and locally, then dangling image layers on the server. Other projects' containers, images, networks and volumes are never touched.
+- `rocketctl build --push` pushes the new image right after building.
+- `shared_proxy: true` in `rocket.yaml`: several projects share one Caddy on the server. Deploy creates `~/apps/edge` if missing, installs the project's Caddyfile as `~/apps/edge/sites/<project>.caddy` and reloads Caddy, restoring the old file if Caddy rejects the new one.
+- `platform` in `rocket.yaml` (e.g. `linux/amd64`): `build` passes it as `--platform`, so an Apple Silicon Mac builds images an x86_64 server can run.
+- `rocketctl --version` reports the binary version.
+- SSH host keys are verified against `~/.ssh/known_hosts`, with a prompt on first connect; `insecure_skip_host_key_check: true` opts out.
+- `project` and `service` names are validated in `rocket.yaml`.
 
 ### Changed
-- `deploy --clean` removes only this project's old images and dangling layers on the server. It no longer prunes containers, networks or volumes.
-- `init` no longer generates a Caddy service or asks for an email; it writes `shared_proxy: true` when a domain is given.
+- `init` generates the shared-proxy layout: `shared_proxy: true` and `platform: linux/amd64` in `rocket.yaml`, no Caddy service in `docker-compose.prod.yml`, a Caddyfile with site blocks only, and no email prompt. Projects generated earlier keep their own Caddy and deploy as before.
+- Deploy pins every compose service whose image rocketctl builds, including services that reuse a built image, and writes the deployed tags back to the local `docker-compose.prod.yml`.
+- `up --prod` creates the `edge` network when the compose file uses it.
+
+### Fixed
+- Deploy runs the built versions instead of falling back to `:latest`.
+- Compose version variables are shell-safe for service names with `-`.
+- `.env` is uploaded with mode 0600.
+- `prune` removes the registry-tagged images too.
+- `exec` drops `-t` when stdin is not a terminal.
 
 ## [1.4.0] - 2026-02-21
 
