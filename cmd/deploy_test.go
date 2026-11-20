@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -153,4 +154,21 @@ func TestSaveDeployedCompose(t *testing.T) {
 			t.Errorf("file = %q, want the edit kept", got)
 		}
 	})
+}
+
+func TestEdgeInstallCommand(t *testing.T) {
+	got := edgeInstallCommand("my-app")
+	for _, want := range []string{
+		"cd ~/apps/edge && docker compose up -d && ",
+		"mv sites/'my-app.caddy.new' sites/'my-app.caddy'",
+		"caddy reload --config /etc/caddy/Caddyfile",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("edgeInstallCommand() missing %q in %q", want, got)
+		}
+	}
+	// docker compose up must come before the new file is installed.
+	if strings.Index(got, "docker compose up -d") > strings.Index(got, "mv sites/") {
+		t.Error("up -d must run before installing the site file")
+	}
 }

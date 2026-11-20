@@ -102,3 +102,36 @@ func imageRepository(image string) string {
 	}
 	return image
 }
+
+// UsesNetwork reports whether any service joins the named network, written as
+// a list item or as a mapping key. Comments and top-level declarations don't
+// count.
+func UsesNetwork(content []byte, network string) bool {
+	var doc yaml.Node
+	if yaml.Unmarshal(content, &doc) != nil || len(doc.Content) == 0 {
+		return false
+	}
+	services := mappingValue(doc.Content[0], "services")
+	if services == nil || services.Kind != yaml.MappingNode {
+		return false
+	}
+	for i := 1; i < len(services.Content); i += 2 {
+		networks := mappingValue(services.Content[i], "networks")
+		if networks == nil {
+			continue
+		}
+		switch networks.Kind {
+		case yaml.SequenceNode:
+			for _, item := range networks.Content {
+				if item.Value == network {
+					return true
+				}
+			}
+		case yaml.MappingNode:
+			if mappingValue(networks, network) != nil {
+				return true
+			}
+		}
+	}
+	return false
+}

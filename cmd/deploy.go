@@ -15,6 +15,7 @@ import (
 	"github.com/cjairm/rocketctl/internal/docker"
 	"github.com/cjairm/rocketctl/internal/registry"
 	"github.com/cjairm/rocketctl/internal/ssh"
+	"github.com/cjairm/rocketctl/internal/templates"
 	"github.com/cjairm/rocketctl/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -60,6 +61,59 @@ func init() {
 		false,
 		"Free space after a successful deploy: remove this project's old images from the server, ECR and locally (keeps current and previous)",
 	)
+}
+
+// edgeInstallCommand installs this project's uploaded site file into the shared
+// proxy and reloads Caddy, taking the file back out if Caddy rejects it. A bad
+// site block left on disk would take down every site at the next Caddy restart.
+// "up -d" runs before the install: it creates the edge network and starts Caddy
+// on the first deploy, and stops here if the ports are taken. The "~" stays
+// outside the quotes so the remote shell expands it.
+func edgeInstallCommand(project string) string {
+	site := "sites/" + ssh.ShellQuote(project+".caddy")
+	bak := "sites/" + ssh.ShellQuote(project+".caddy.bak")
+	next := "sites/" + ssh.ShellQuote(project+".caddy.new")
+	return "cd ~/apps/edge && docker compose up -d && " +
+		"{ [ -f " + site + " ] && cp " + site + " " + bak + " || rm -f " + bak + "; } && " +
+		"mv " + next + " " + site + " && " +
+		"{ docker exec edge-caddy caddy reload --config /etc/caddy/Caddyfile || " +
+		"{ if [ -f " + bak + " ]; then mv " + bak + " " + site + "; else rm -f " + site + "; fi; exit 1; }; }"
+}
+
+// uploadIfMissing uploads content to remotePath unless a file is already there,
+// so the user's edits survive later deploys.
+func uploadIfMissing(client *ssh.Client, content []byte, remotePath string) error {
+	exists, err := client.FileExists(remotePath)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	return client.UploadContent(bytes.NewReader(content), remotePath, 0o644)
+}
+
+// deploySharedProxy sets up ~/apps/edge if needed and installs this project's
+// Caddyfile into it.
+func deploySharedProxy(client *ssh.Client, cfg *config.Config, localCaddyPath string) error {
+	fmt.Println("📤 Updating the shared proxy (~/apps/edge)...")
+	if err := client.MkdirAll("~/apps/edge/sites"); err != nil {
+		return err
+	}
+	if err := uploadIfMissing(client, templates.EdgeCompose, "~/apps/edge/docker-compose.yml"); err != nil {
+		return fmt.Errorf("failed to upload the edge docker-compose.yml: %w", err)
+	}
+	if err := uploadIfMissing(client, templates.EdgeCaddyfile, "~/apps/edge/Caddyfile"); err != nil {
+		return fmt.Errorf("failed to upload the edge Caddyfile: %w", err)
+	}
+	remoteNew := "~/apps/edge/sites/" + ssh.ShellQuote(cfg.Project+".caddy.new")
+	if err := client.UploadFile(localCaddyPath, remoteNew); err != nil {
+		return fmt.Errorf("failed to upload Caddyfile: %w", err)
+	}
+	if err := client.ExecInteractive(edgeInstallCommand(cfg.Project)); err != nil {
+		return fmt.Errorf("shared proxy update failed (the previous site file was kept): %w", err)
+	}
+	return nil
 }
 
 // remoteImagesCommand lists the tags of one image repository on the server.
@@ -333,6 +387,14 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read docker-compose.prod.yml: %w", err)
 	}
+	if cfg.SharedProxy {
+		if _, err := os.Stat(filepath.Join(cwd, "caddy", "Caddyfile")); err != nil {
+			return fmt.Errorf("shared_proxy is set but caddy/Caddyfile is missing: create it with the site blocks for %s", cfg.Domain)
+		}
+		if !compose.UsesNetwork(composeContent, "edge") {
+			return fmt.Errorf("shared_proxy is set but no service in docker-compose.prod.yml joins the 'edge' network, so Caddy can't reach anything: add '- edge' under 'networks:' of the service Caddy routes to")
+		}
+	}
 	pinnedCompose, updated, err := compose.PinImages(
 		composeContent,
 		builtImageTags(cfg, serviceVersions),
@@ -383,7 +445,11 @@ func runDeploy(cmd *cobra.Command, args []string) error {
 	}
 
 	// Upload Caddyfile if domain is configured and file exists
-	if cfg.Domain != "" {
+	if cfg.SharedProxy {
+		if err := deploySharedProxy(client, cfg, filepath.Join(cwd, "caddy", "Caddyfile")); err != nil {
+			return err
+		}
+	} else if cfg.Domain != "" {
 		localCaddyPath := filepath.Join(cwd, "caddy", "Caddyfile")
 		if _, err := os.Stat(localCaddyPath); err == nil {
 			fmt.Println("📤 Uploading Caddyfile...")

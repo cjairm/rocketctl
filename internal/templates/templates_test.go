@@ -3,6 +3,8 @@ package templates
 import (
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func TestRenderDockerComposeProdUsesShellSafeVersionVars(t *testing.T) {
@@ -36,5 +38,15 @@ func TestRenderDockerComposeProdOmitsObsoleteVersionAttribute(t *testing.T) {
 	}
 	if strings.HasPrefix(strings.TrimSpace(out), "version:") {
 		t.Error("rendered compose still declares the obsolete top-level version attribute")
+	}
+}
+
+func TestEdgeComposeIsValidYAML(t *testing.T) {
+	var doc map[string]any
+	if err := yaml.Unmarshal(EdgeCompose, &doc); err != nil {
+		t.Fatalf("edge compose is not valid YAML: %v", err)
+	}
+	if _, ok := doc["services"]; !ok {
+		t.Error("edge compose has no services")
 	}
 }

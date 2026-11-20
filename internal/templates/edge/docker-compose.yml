@@ -1,0 +1,23 @@
+name: edge
+networks:
+  edge:
+    name: edge
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: edge-caddy
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro # only Caddyfiles, never a project's .env
+      - caddy_data:/data # certificates; a named volume, safe from any prune
+      - caddy_config:/config
+    networks: [edge]
+    mem_limit: 128m
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+volumes:
+  caddy_data:
+  caddy_config:

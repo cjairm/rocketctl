@@ -13,16 +13,17 @@ import (
 
 // Config represents the rocket.yaml configuration file
 type Config struct {
-	Project    string   `yaml:"project"`
-	Service    string   `yaml:"service,omitempty"`  // For single-service repos
-	Services   []string `yaml:"services,omitempty"` // For monorepos
-	Registry   string   `yaml:"registry"`
-	Region     string   `yaml:"region"`
-	Domain     string   `yaml:"domain,omitempty"`
-	Platform   string   `yaml:"platform,omitempty"`     // Target os/arch for builds, e.g. linux/amd64
-	IP         string   `yaml:"ip,omitempty"`           // Server IP for SSH deployment
-	SSHUser    string   `yaml:"ssh_user,omitempty"`     // SSH user (defaults to current user)
-	SSHKeyPath string   `yaml:"ssh_key_path,omitempty"` // Custom SSH key path (e.g., ~/my-key.pem)
+	Project     string   `yaml:"project"`
+	Service     string   `yaml:"service,omitempty"`  // For single-service repos
+	Services    []string `yaml:"services,omitempty"` // For monorepos
+	Registry    string   `yaml:"registry"`
+	Region      string   `yaml:"region"`
+	Domain      string   `yaml:"domain,omitempty"`
+	SharedProxy bool     `yaml:"shared_proxy,omitempty"` // Deploy manages ~/apps/edge, one Caddy for every project
+	Platform    string   `yaml:"platform,omitempty"`     // Target os/arch for builds, e.g. linux/amd64
+	IP          string   `yaml:"ip,omitempty"`           // Server IP for SSH deployment
+	SSHUser     string   `yaml:"ssh_user,omitempty"`     // SSH user (defaults to current user)
+	SSHKeyPath  string   `yaml:"ssh_key_path,omitempty"` // Custom SSH key path (e.g., ~/my-key.pem)
 
 	InsecureSkipHostKeyCheck bool `yaml:"insecure_skip_host_key_check,omitempty"` // Opt out of known_hosts verification
 }
@@ -78,6 +79,14 @@ func (c *Config) Validate() error {
 	}
 	if err := validateName("region", c.Region); err != nil {
 		return err
+	}
+	if c.SharedProxy {
+		if c.Domain == "" {
+			return fmt.Errorf("shared_proxy needs a domain in rocket.yaml: the shared proxy exists only to serve it")
+		}
+		if c.Project == "edge" {
+			return fmt.Errorf("the name 'edge' is reserved for the shared proxy: rename the project in rocket.yaml")
+		}
 	}
 	if c.Platform != "" && !platformPattern.MatchString(c.Platform) {
 		return fmt.Errorf(

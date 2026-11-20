@@ -393,3 +393,25 @@ func TestValidatePlatform(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateSharedProxy(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*Config)
+		wantErr bool
+	}{
+		{"with a domain", func(c *Config) { c.SharedProxy = true; c.Domain = "a.com" }, false},
+		{"without a domain", func(c *Config) { c.SharedProxy = true }, true},
+		{"project named edge", func(c *Config) { c.SharedProxy = true; c.Domain = "a.com"; c.Project = "edge" }, true},
+		{"edge is fine without shared_proxy", func(c *Config) { c.Project = "edge" }, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := singleService()
+			tt.mutate(cfg)
+			if err := cfg.Validate(); (err != nil) != tt.wantErr {
+				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

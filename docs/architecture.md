@@ -86,7 +86,12 @@ Derived values. Note `filepath.Join` **cleans** its result, so a monorepo servic
 2. Connect over SSH (custom key → `~/.ssh/id_ed25519` → `~/.ssh/id_rsa`; passphrases unsupported).
 3. `mkdir -p ~/apps/<project>` on the server.
 4. Upload the pinned copy as `docker-compose.yml`.
-5. Upload `caddy/Caddyfile` if `domain` is set and the file exists.
+5. Upload `caddy/Caddyfile` if `domain` is set and the file exists. With `shared_proxy: true`
+   (checked before connecting: the Caddyfile exists and a service joins the `edge` network)
+   deploy instead creates `~/apps/edge` if missing (the embedded compose file and Caddyfile are
+   uploaded only when absent), uploads the site file to `edge/sites/<project>.caddy.new`, and
+   runs `edgeInstallCommand`: `docker compose up -d` in the edge folder, install the site
+   file, `caddy reload`, restoring the previous file if Caddy rejects the new one.
 6. Upload `.env.example` → `.env` per service, only when `.env` is absent on the server.
 7. Run ECR login, then `docker compose pull` and `docker compose up -d` remotely with each
    service's `<SERVICE>_VERSION` set from its local `.rocket-version`, so the server runs the

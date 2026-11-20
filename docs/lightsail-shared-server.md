@@ -204,6 +204,12 @@ mkdir -p ~/apps/edge ~/apps/cochinitoapp/caddy ~/apps/automatedhub/caddy
 
 ## Step 3 — The shared Caddy (`~/apps/edge`)
 
+**For rocketctl projects there is nothing to do:** set `shared_proxy: true` in `rocket.yaml` and the
+first deploy creates `~/apps/edge`, starts Caddy and installs the project's site file in
+`~/apps/edge/sites/`. The manual setup below is only for projects not deployed with rocketctl
+(AutomatedHub) or if you prefer to do it by hand; its mount-per-project layout is replaced by the
+single `./sites` mount that rocketctl's embedded edge compose file uses.
+
 `~/apps/edge/docker-compose.yml`:
 
 ```yaml
@@ -517,8 +523,8 @@ Adding a project means following these rules. They're what keeps projects out of
 1. It lives in `~/apps/<project>/`. rocketctl does this automatically.
 2. It never publishes ports 80 or 443. Only the services Caddy routes to join the external `edge`
    network.
-3. Its `caddy/Caddyfile` contains site blocks only. Add one mount line to
-   `~/apps/edge/docker-compose.yml`, run `docker compose up -d` there, then reload Caddy.
+3. Its `caddy/Caddyfile` contains site blocks only. Drop it into `~/apps/edge/sites/<project>.caddy`
+   and reload Caddy (rocketctl projects with `shared_proxy: true` do this on every deploy).
 4. Container and Compose service names start with `<project>-`. The rocketctl template does this,
    and `migrate` depends on it.
 5. Every service has a `mem_limit`, so one project's leak can't take down the others.
@@ -539,7 +545,6 @@ These are gaps found while writing this guide. Nothing here has been built:
   `rocket.yaml`, but AutomatedHub keeps each service in its own repository (`automatedhub_api/`, …)
   with versions in `automatedhub_cli/automatedhub_<service>/.version`. Using rocketctl only for
   deploys would mean keeping two version files in sync by hand.
-- **`deploy` doesn't reload the shared Caddy** after uploading a changed Caddyfile.
 - **`init` assumes one project per server**, because of its `caddy` service on ports 80 and 443.
 
 ## Sources

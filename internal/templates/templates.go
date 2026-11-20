@@ -17,6 +17,15 @@ var dockerComposeProdTemplate string
 //go:embed Caddyfile.tmpl
 var caddyfileTemplate string
 
+// EdgeCompose and EdgeCaddyfile are the shared proxy's files, uploaded to
+// ~/apps/edge only when missing.
+//
+//go:embed edge/docker-compose.yml
+var EdgeCompose []byte
+
+//go:embed edge/Caddyfile
+var EdgeCaddyfile []byte
+
 // composeFuncs is shared by both compose renderers so the version variable
 // spelled in the template can never drift from the one the Go code sets.
 var composeFuncs = template.FuncMap{

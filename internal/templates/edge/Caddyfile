@@ -1,0 +1,6 @@
+# Global options go here, once, e.g.:
+# {
+# 	email you@example.com
+# }
+# Each project's site blocks: sites/<project>.caddy, written by rocketctl deploy.
+import /etc/caddy/sites/*.caddy

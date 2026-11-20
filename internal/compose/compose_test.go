@@ -160,3 +160,24 @@ func TestExecFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestUsesNetwork(t *testing.T) {
+	tests := []struct {
+		name string
+		yaml string
+		want bool
+	}{
+		{"list form", "services:\n  api:\n    networks:\n      - edge\n", true},
+		{"mapping form", "services:\n  api:\n    networks:\n      edge: {}\n", true},
+		{"declared but no service joins", "services:\n  api:\n    image: x\nnetworks:\n  edge:\n    external: true\n", false},
+		{"only in a comment", "services:\n  api:\n    # networks:\n    #   - edge\n    image: x\nnetworks:\n  edge:\n    external: true\n", false},
+		{"other network only", "services:\n  api:\n    networks: [backend]\n", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := UsesNetwork([]byte(tt.yaml), "edge"); got != tt.want {
+				t.Errorf("UsesNetwork() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

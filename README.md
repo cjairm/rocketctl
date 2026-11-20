@@ -108,6 +108,7 @@ registry: 123456789.dkr.ecr.us-east-2.amazonaws.com
 region: us-east-2
 domain: api.myapp.com      # optional
 platform: linux/amd64      # optional - what the server runs; omit to build for this machine
+shared_proxy: true         # optional - deploy manages one Caddy for every project on the server
 ip: 192.168.1.100          # optional - for SSH deployment
 ssh_user: ubuntu           # optional - defaults to current user
 ssh_key_path: ~/my-key.pem # optional - custom SSH key (e.g., AWS EC2 .pem file)
@@ -377,6 +378,24 @@ rocketctl build api --bump patch
 rocketctl push api
 rocketctl deploy
 ```
+
+### Several projects on one server
+
+Add two lines to each project's `rocket.yaml`:
+
+```yaml
+domain: myapp.com
+shared_proxy: true
+```
+
+The first deploy creates `~/apps/edge` (one Caddy on ports 80/443 and the `edge` network). Every
+deploy then installs the project's `caddy/Caddyfile` as `~/apps/edge/sites/<project>.caddy` and
+reloads Caddy; if Caddy rejects the file, the previous one is restored. The Caddyfile holds site
+blocks only (no global `{ email }` block; put that in `~/apps/edge/Caddyfile`, which deploy never
+overwrites). Add `- edge` under `networks:` of the service Caddy routes to, and declare
+`edge: { external: true }` at the top level of `docker-compose.prod.yml`. The project name
+`edge` is reserved. For a project not deployed with rocketctl, copy its site file to
+`~/apps/edge/sites/<name>.caddy` and run `docker exec edge-caddy caddy reload --config /etc/caddy/Caddyfile`.
 
 ### Deployment Directory Structure
 
