@@ -19,7 +19,7 @@ type Config struct {
 	Registry   string   `yaml:"registry"`
 	Region     string   `yaml:"region"`
 	Domain     string   `yaml:"domain,omitempty"`
-	Platform   string   `yaml:"platform,omitempty"` // Target os/arch for builds, e.g. linux/amd64
+	Platform   string   `yaml:"platform,omitempty"`     // Target os/arch for builds, e.g. linux/amd64
 	IP         string   `yaml:"ip,omitempty"`           // Server IP for SSH deployment
 	SSHUser    string   `yaml:"ssh_user,omitempty"`     // SSH user (defaults to current user)
 	SSHKeyPath string   `yaml:"ssh_key_path,omitempty"` // Custom SSH key path (e.g., ~/my-key.pem)
